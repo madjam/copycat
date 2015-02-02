@@ -276,7 +276,7 @@ class LeaderState extends ActiveState {
       }
 
       // Quorum is floor(replicas.size / 2) since this node is implicitly counted in the quorum count.
-      this.quorum = (int) Math.floor(context.getActiveMembers().size() / 2);
+      this.quorum = (int) Math.floor(context.getActiveMembers().size() / 2) + 1;
       this.quorumIndex = quorum - 1;
     }
 
@@ -514,7 +514,7 @@ class LeaderState extends ActiveState {
                   // us to skip repeatedly replicating one entry at a time if it's not
                   // necessary.
                   nextIndex = response.logIndex() != null ? response.logIndex() + 1
-                    : prevIndex != null ? prevIndex : context.log().firstIndex();
+                    : context.log().firstIndex();
                   doCommit();
                 }
               }
