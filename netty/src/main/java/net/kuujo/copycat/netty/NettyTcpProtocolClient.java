@@ -68,15 +68,16 @@ public class NettyTcpProtocolClient implements ProtocolClient {
           })
           .build();
   private long requestId;
-  private static final ScheduledExecutorService CONNECTION_AGENT =
-		  Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("netty-tcp-connection-monitor-%d"));
+  private final ScheduledExecutorService connectionMonitor;
 
   public NettyTcpProtocolClient(String host, int port, NettyTcpProtocol protocol) {
     this.host = host;
     this.port = port;
     this.protocol = protocol;
     this.group = new NioEventLoopGroup(protocol.getThreads());
-    CONNECTION_AGENT.scheduleWithFixedDelay((() -> connect()), 0, 100, TimeUnit.MILLISECONDS);
+    connectionMonitor =
+      Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("netty-tcp-connection-monitor-" + host + ":" + port + "-%d"));
+    connectionMonitor.scheduleWithFixedDelay((() -> connect()), 0, 100, TimeUnit.MILLISECONDS);
   }
 
   @Override
