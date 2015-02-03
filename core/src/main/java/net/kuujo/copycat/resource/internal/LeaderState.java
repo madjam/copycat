@@ -488,7 +488,6 @@ class LeaderState extends ActiveState {
           if (error != null) {
             triggerCommitFutures(prevIndex != null ? prevIndex + 1 : context.log().firstIndex(),
               prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1, error);
-            doCommit();
           } else {
             LOGGER.debug("{} - Received {} from {}", context.getLocalMember(), response, member);
             if (response.status().equals(Response.Status.OK)) {
@@ -513,7 +512,7 @@ class LeaderState extends ActiveState {
                   // the replica in the response to generate a new nextIndex. This allows
                   // us to skip repeatedly replicating one entry at a time if it's not
                   // necessary.
-                  nextIndex = response.logIndex() != null ? response.logIndex() + 1
+                  nextIndex = response.logIndex() != null ? response.logIndex() - 1
                     : context.log().firstIndex();
                   doCommit();
                 }
