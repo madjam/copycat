@@ -15,7 +15,6 @@
  */
 package net.kuujo.copycat.resource.internal;
 
-import net.kuujo.copycat.protocol.Consistency;
 import net.kuujo.copycat.protocol.rpc.*;
 
 import java.io.IOException;
@@ -146,14 +145,13 @@ public class PassiveState extends AbstractState {
             // If the response succeeded, update membership info with the target node's membership.
             if (response.status() == Response.Status.OK) {
               context.setMemberInfo(response.members());
-              recursiveSync(member, true, future);
             } else {
               LOGGER.warn("{} - Received error response from {}", context.getLocalMember(), member.getUri());
               future.completeExceptionally(response.error());
             }
           } else {
             // If the request failed then record the member as INACTIVE.
-            LOGGER.warn("{} - Sync to {} failed", context.getLocalMember(), member);
+            LOGGER.debug("{} - Sync to {} failed", context.getLocalMember(), member);
             future.completeExceptionally(error);
           }
         }
@@ -254,13 +252,7 @@ public class PassiveState extends AbstractState {
   public CompletableFuture<QueryResponse> query(QueryRequest request) {
     context.checkThread();
     logRequest(request);
-    // If the request allows inconsistency, immediately execute the query and return the result.
-    if (request.consistency() == Consistency.WEAK) {
-      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
-        .withUri(context.getLocalMember())
-        .withResult(context.consumer().apply(null, request.entry()))
-        .build()));
-    } else if (context.getLeader() == null) {
+    if (context.getLeader() == null) {
       return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
         .withUri(context.getLocalMember())
         .withStatus(Response.Status.ERROR)
