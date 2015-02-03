@@ -64,7 +64,7 @@ public class CopycatStateContext extends Observable implements RaftProtocol {
   private long version;
   private String lastVotedFor;
   private Long commitIndex;
-  private Long lastApplied;
+  private long lastApplied;
   private long electionTimeout = 500;
   private long heartbeatInterval = 250;
   private volatile boolean open;
@@ -384,7 +384,7 @@ public class CopycatStateContext extends Observable implements RaftProtocol {
    * @return The Copycat state context.
    */
   CopycatStateContext setLastApplied(Long lastApplied) {
-    this.lastApplied = this.lastApplied != null ? Assert.arg(Assert.isNotNull(lastApplied, "lastApplied"), lastApplied >= this.lastApplied, "cannot decrease last applied index") : lastApplied;
+    this.lastApplied = this.lastApplied > 0 ? Assert.arg(Assert.isNotNull(lastApplied, "lastApplied"), lastApplied >= this.lastApplied, "cannot decrease last applied index") : lastApplied;
     return this;
   }
 
