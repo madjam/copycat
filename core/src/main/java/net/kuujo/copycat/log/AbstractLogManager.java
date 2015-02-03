@@ -129,7 +129,9 @@ public abstract class AbstractLogManager extends AbstractLoggable implements Log
     // Load existing log segments from disk.
     for (LogSegment segment : loadSegments()) {
       segment.open();
-      segments.put(segment.firstIndex(), segment);
+      if (segment.firstIndex() != null) {
+        segments.put(segment.firstIndex(), segment);
+      }
     }
 
     // If a segment doesn't already exist, create an initial segment starting at index 1.
@@ -139,7 +141,9 @@ public abstract class AbstractLogManager extends AbstractLoggable implements Log
       createInitialSegment();
     }
 
-    clean();
+    if (segments.size() > 1) {
+      clean();
+    }
   }
 
   /**
