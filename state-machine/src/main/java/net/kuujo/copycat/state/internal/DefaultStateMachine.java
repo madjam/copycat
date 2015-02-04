@@ -136,7 +136,7 @@ public class DefaultStateMachine<T> extends AbstractResource<StateMachine<T>> im
     log.snapshotWith(this::snapshot);
     log.installWith(this::install);
     return runStartupTasks()
-      .thenComposeAsync(v -> log.open(), executor)
+      .thenCompose(v -> log.open())
       .thenApply(v -> this);
   }
 
