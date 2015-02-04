@@ -493,12 +493,12 @@ class LeaderState extends ActiveState {
             if (response.status().equals(Response.Status.OK)) {
               if (response.succeeded()) {
                 // Update the next index to send and the last index known to be replicated.
+                matchIndex = matchIndex != null ? Math.max(matchIndex,
+                  prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1)
+                  : prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1;
+                nextIndex = matchIndex + 1;
+                triggerCommitFutures(prevIndex != null ? prevIndex + 1 : context.log().firstIndex(), matchIndex);
                 if (!entries.isEmpty()) {
-                  matchIndex = matchIndex != null ? Math.max(matchIndex,
-                    prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1)
-                    : prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1;
-                  nextIndex = matchIndex + 1;
-                  triggerCommitFutures(prevIndex != null ? prevIndex + 1 : context.log().firstIndex(), matchIndex);
                   doCommit();
                 }
               } else {
