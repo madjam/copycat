@@ -12,8 +12,8 @@
   <version>0.5.0.onos-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Copycat</name>
-  <description>Replicated state machine framework based on the Raft consensus algorithm.</description>
-  <url>http://github.com/kuujo/copycat</url>
+  <description>Replicated state machine framework based on the Raft consensus algorithm. Fork based on http://github.com/kuujo/copycat</description>
+  <url>http://github.com/madjam/copycat</url>
   <inceptionYear>2013</inceptionYear>
 
   <properties>
@@ -46,14 +46,14 @@
   </developers>
 
   <scm>
-    <connection>scm:git:git@github.com:kuujo/copycat.git</connection>
-    <developerConnection>scm:git:git@github.com:kuujo/copycat.git</developerConnection>
-    <url>git@github.com:kuujo/copycat.git</url>
+    <connection>scm:git:git@github.com:madjam/copycat.git</connection>
+    <developerConnection>scm:git:git@github.com:madjam/copycat.git</developerConnection>
+    <url>git@github.com:madjam/copycat.git</url>
   </scm>
 
   <issueManagement>
     <system>GitHub</system>
-    <url>http://github.com/kuujo/copycat/issues</url>
+    <url>http://github.com/madjam/copycat/issues</url>
   </issueManagement>
 
   <distributionManagement>
