@@ -192,6 +192,7 @@ public abstract class ProtocolTest extends ConcurrentTestCase {
     client.connect().thenRunAsync(this::resume);
     await(5000);
 
+    expectResume();
     client.write(ByteBuffer.wrap("Hello world!".getBytes())).thenAcceptAsync(buffer -> {
       byte[] bytes = new byte[buffer.remaining()];
       buffer.get(bytes);
@@ -200,6 +201,7 @@ public abstract class ProtocolTest extends ConcurrentTestCase {
     });
     await(5000);
 
+    expectResume();
     client.write(ByteBuffer.wrap("Hello world!".getBytes())).thenAcceptAsync(buffer -> {
       byte[] bytes = new byte[buffer.remaining()];
       buffer.get(bytes);
@@ -208,6 +210,7 @@ public abstract class ProtocolTest extends ConcurrentTestCase {
     });
     await(5000);
 
+    expectResume();
     client.write(ByteBuffer.wrap("Hello world!".getBytes())).thenAcceptAsync(buffer -> {
       byte[] bytes = new byte[buffer.remaining()];
       buffer.get(bytes);
@@ -215,6 +218,14 @@ public abstract class ProtocolTest extends ConcurrentTestCase {
       resume();
     });
     await(5000);
+
+    expectResume();
+    client.close().thenRunAsync(this::resume);
+    await(2500);
+
+    expectResume();
+    server.close().thenRunAsync(this::resume);
+    await(2500);
   }
 
 }
