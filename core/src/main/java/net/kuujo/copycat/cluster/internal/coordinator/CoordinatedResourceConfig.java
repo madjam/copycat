@@ -48,6 +48,10 @@ public class CoordinatedResourceConfig extends AbstractConfigurable {
 
   private Serializer defaultSerializer = new KryoSerializer();
   private Executor defaultExecutor;
+
+  @SuppressWarnings("rawtypes")
+  private Class<? extends Resource> resourceTypeClass;
+
   private Executor executor;
 
   public CoordinatedResourceConfig() {
@@ -109,7 +113,7 @@ public class CoordinatedResourceConfig extends AbstractConfigurable {
    */
   @SuppressWarnings("rawtypes")
   public void setResourceType(Class<? extends Resource> type) {
-    this.config = config.withValue(RESOURCE_TYPE, ConfigValueFactory.fromAnyRef(Assert.isNotNull(type, "type").getName()));
+    this.resourceTypeClass = Assert.isNotNull(type, "type");
   }
 
   /**
@@ -120,7 +124,9 @@ public class CoordinatedResourceConfig extends AbstractConfigurable {
   @SuppressWarnings({"unchecked", "rawtypes"})
   public Class<? extends Resource> getResourceType() {
     try {
-      return (Class<? extends Resource>) Class.forName(config.getString(RESOURCE_TYPE));
+      return (resourceTypeClass != null)
+        ? resourceTypeClass
+        : (Class<? extends Resource>) Class.forName(config.getString(RESOURCE_TYPE));
     } catch (ClassNotFoundException e) {
       throw new ConfigurationException("Failed to load resource class", e);
     }

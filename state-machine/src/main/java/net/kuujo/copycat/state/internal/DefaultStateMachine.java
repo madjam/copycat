@@ -97,9 +97,14 @@ public class DefaultStateMachine<T> extends AbstractResource<StateMachine<T>> im
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public <U> U createProxy(Class<U> type) {
-    return (U) Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{type}, handler);
+    return createProxy(type, getClass().getClassLoader());
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public <U> U createProxy(Class<U> type, ClassLoader classLoader) {
+    return (U) Proxy.newProxyInstance(classLoader, new Class[]{type}, handler);
   }
 
   /**

@@ -93,4 +93,14 @@ public interface StateMachine<T> extends Resource<StateMachine<T>> {
    */
   <U> U createProxy(Class<U> type);
 
+  /**
+   * Creates a state machine proxy.
+   *
+   * @param type The proxy interface.
+   * @param classLoader The class loader to define the proxy class.
+   * @param <U> The proxy type.
+   * @return The proxy object.
+   */
+  <U> U createProxy(Class<U> type, ClassLoader classLoader);
+
 }
