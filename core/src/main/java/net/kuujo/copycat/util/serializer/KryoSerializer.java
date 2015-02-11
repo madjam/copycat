@@ -20,10 +20,24 @@ import com.esotericsoftware.kryo.io.ByteBufferInput;
 import com.esotericsoftware.kryo.io.ByteBufferOutput;
 import com.typesafe.config.ConfigObject;
 import com.typesafe.config.ConfigValueFactory;
+
+import net.kuujo.copycat.cluster.internal.MemberInfo;
+import net.kuujo.copycat.protocol.rpc.AppendRequest;
+import net.kuujo.copycat.protocol.rpc.AppendResponse;
+import net.kuujo.copycat.protocol.rpc.CommitRequest;
+import net.kuujo.copycat.protocol.rpc.CommitResponse;
+import net.kuujo.copycat.protocol.rpc.PollRequest;
+import net.kuujo.copycat.protocol.rpc.PollResponse;
+import net.kuujo.copycat.protocol.rpc.QueryRequest;
+import net.kuujo.copycat.protocol.rpc.QueryResponse;
+import net.kuujo.copycat.protocol.rpc.ReplicaInfo;
+import net.kuujo.copycat.protocol.rpc.SyncRequest;
+import net.kuujo.copycat.protocol.rpc.SyncResponse;
 import net.kuujo.copycat.util.ConfigurationException;
 import net.kuujo.copycat.util.internal.Assert;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -37,6 +51,22 @@ public class KryoSerializer extends SerializerConfig {
   private static final String KRYO_SERIALIZER_REGISTRATIONS = "registrations";
 
   private static final int DEFAULT_KRYO_SERIALIZER_BUFFER_SIZE = 1024 * 1024 * 16;
+
+  private static Map<String, Object> idToClassMap = new HashMap<>();
+  static {
+    idToClassMap.put(String.valueOf(101), SyncRequest.class);
+    idToClassMap.put(String.valueOf(102), SyncResponse.class);
+    idToClassMap.put(String.valueOf(103), PollRequest.class);
+    idToClassMap.put(String.valueOf(104), PollResponse.class);
+    idToClassMap.put(String.valueOf(105), AppendRequest.class);
+    idToClassMap.put(String.valueOf(106), AppendResponse.class);
+    idToClassMap.put(String.valueOf(107), QueryRequest.class);
+    idToClassMap.put(String.valueOf(108), QueryResponse.class);
+    idToClassMap.put(String.valueOf(109), CommitRequest.class);
+    idToClassMap.put(String.valueOf(110), CommitResponse.class);
+    idToClassMap.put(String.valueOf(111), ReplicaInfo.class);
+    idToClassMap.put(String.valueOf(112), MemberInfo.class);
+  }
 
   private Kryo kryo = new Kryo();
   private ByteBufferOutput output;
@@ -75,18 +105,18 @@ public class KryoSerializer extends SerializerConfig {
    */
   @SuppressWarnings({"rawtypes"})
   private void register() {
-    if (config.hasPath(KRYO_SERIALIZER_REGISTRATIONS)) {
-      ConfigObject config = this.config.getObject(KRYO_SERIALIZER_REGISTRATIONS);
-      for (Map.Entry<String, Object> entry : config.unwrapped().entrySet()) {
-        Object type = entry.getValue();
-        if (type instanceof Class) {
-          register((Class) type, Integer.valueOf(entry.getKey()));
-        } else if (type instanceof String) {
-          try {
-            register(Class.forName(type.toString()), Integer.valueOf(entry.getKey()));
-          } catch (ClassNotFoundException e) {
-            throw new ConfigurationException("Failed to register serializer class", e);
-          }
+    Map<String, Object> regMap = config.hasPath(KRYO_SERIALIZER_REGISTRATIONS)
+            ? this.config.getObject(KRYO_SERIALIZER_REGISTRATIONS).unwrapped()
+            : idToClassMap;
+    for (Map.Entry<String, Object> entry : regMap.entrySet()) {
+      Object type = entry.getValue();
+      if (type instanceof Class) {
+        register((Class) type, Integer.valueOf(entry.getKey()));
+      } else if (type instanceof String) {
+        try {
+          register(Class.forName(type.toString()), Integer.valueOf(entry.getKey()));
+        } catch (ClassNotFoundException e) {
+          throw new ConfigurationException("Failed to register serializer class", e);
         }
       }
     }
