@@ -127,7 +127,7 @@ class CandidateState extends ActiveState {
         context.checkThread();
         if (isOpen() && !complete.get()) {
           if (error != null) {
-            LOGGER.warn(context.getLocalMember(), error);
+            LOGGER.trace(context.getLocalMember(), error);
             quorum.fail();
           } else if (!response.voted()) {
             LOGGER.info("{} - Received rejected vote from {}", context.getLocalMember(), member);
