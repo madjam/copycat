@@ -63,7 +63,9 @@ public class NettyTcpProtocolClient implements ProtocolClient {
           .removalListener(new RemovalListener<Object, CompletableFuture<ByteBuffer>>() {
               @Override
               public void onRemoval(RemovalNotification<Object, CompletableFuture<ByteBuffer>> entry) {
-                entry.getValue().completeExceptionally(new TimeoutException());
+                if (entry.wasEvicted()) {
+                  entry.getValue().completeExceptionally(new TimeoutException());
+                }
               }
           })
           .build();

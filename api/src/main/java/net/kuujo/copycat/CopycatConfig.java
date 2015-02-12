@@ -42,6 +42,7 @@ public class CopycatConfig extends AbstractConfigurable {
   private static final String DEFAULT_CONFIGURATION = "copycat-default";
   private static final String CONFIGURATION = "copycat";
 
+  private Serializer defaultSerializer;
   private Executor executor = Executors.newSingleThreadExecutor(new NamedThreadFactory("copycat-%d"));
 
   public CopycatConfig() {
@@ -162,7 +163,7 @@ public class CopycatConfig extends AbstractConfigurable {
    * @throws java.lang.NullPointerException If the serializer is {@code null}
    */
   public void setDefaultSerializer(Serializer serializer) {
-    this.config = config.withValue(COPYCAT_DEFAULT_SERIALIZER, ConfigValueFactory.fromMap(Assert.isNotNull(serializer, "serializer").toMap()));
+    this.defaultSerializer = serializer;
   }
 
   /**
@@ -172,7 +173,7 @@ public class CopycatConfig extends AbstractConfigurable {
    * @throws net.kuujo.copycat.util.ConfigurationException If the resource serializer configuration is malformed
    */
   public Serializer getDefaultSerializer() {
-    return Configurable.load(config.getObject(COPYCAT_DEFAULT_SERIALIZER).unwrapped());
+    return defaultSerializer != null ? defaultSerializer : Configurable.load(config.getObject(COPYCAT_DEFAULT_SERIALIZER).unwrapped());
   }
 
   /**
