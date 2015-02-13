@@ -337,7 +337,7 @@ class LeaderState extends ActiveState {
         // Sort the list of replicas, order by the last index that was replicated
         // to the replica. This will allow us to determine the median index
         // for all known replicated entries across all cluster members.
-        Collections.sort(replicas, (o1, o2) -> Long.compare(o1.matchIndex != null ? o1.matchIndex : 0, o2.matchIndex != null ? o2.matchIndex : 0));
+        Collections.sort(replicas, (o1, o2) -> Long.compare(o1.matchIndex != null ? o1.matchIndex : 0L, o2.matchIndex != null ? o2.matchIndex : 0L));
 
         // Set the current commit index as the median replicated index.
         // Since replicas is a list with zero based indexes, use the negation of
@@ -486,25 +486,25 @@ class LeaderState extends ActiveState {
         committing = false;
         if (isOpen()) {
           if (error != null) {
-            triggerCommitFutures(prevIndex != null ? prevIndex + 1 : context.log().firstIndex(),
-              prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1, error);
+            triggerCommitFutures(prevIndex != null ? Long.valueOf(prevIndex + 1) : context.log().firstIndex(),
+              prevIndex != null ? Long.valueOf(prevIndex + entries.size()) : Long.valueOf(context.log().firstIndex() + entries.size() - 1), error);
           } else {
             LOGGER.debug("{} - Received {} from {}", context.getLocalMember(), response, member);
             if (response.status().equals(Response.Status.OK)) {
               if (response.succeeded()) {
-                // Update the next index to send and the last index known to be replicated.
-                matchIndex = matchIndex != null ? Math.max(matchIndex,
-                  prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1)
-                  : prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1;
-                nextIndex = matchIndex + 1;
-                triggerCommitFutures(prevIndex != null ? prevIndex + 1 : context.log().firstIndex(), matchIndex);
                 if (!entries.isEmpty()) {
+                  // Update the next index to send and the last index known to be replicated.
+                  matchIndex = matchIndex != null ? Long.valueOf(Math.max(matchIndex, prevIndex != null 
+                                                                ? prevIndex + entries.size() : Long.valueOf(context.log().firstIndex() + entries.size() - 1)))
+                                                                : prevIndex != null ? Long.valueOf(prevIndex + entries.size()) : Long.valueOf(context.log().firstIndex() + entries.size() - 1);
+                  nextIndex = matchIndex + 1;
                   doCommit();
                 }
+                triggerCommitFutures(prevIndex != null ? Long.valueOf(prevIndex + 1) : context.log().firstIndex(), matchIndex);
               } else {
                 if (response.term() > context.getTerm()) {
-                  triggerCommitFutures(prevIndex != null ? prevIndex + 1 : context.log().firstIndex(),
-                    prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1,
+                  triggerCommitFutures(prevIndex != null ? Long.valueOf(prevIndex + 1) : context.log().firstIndex(),
+                    prevIndex != null ? Long.valueOf(prevIndex + entries.size()) : Long.valueOf(context.log().firstIndex() + entries.size() - 1),
                     new CopycatException("Not the leader"));
                   transition(CopycatState.FOLLOWER);
                 } else {
@@ -512,14 +512,14 @@ class LeaderState extends ActiveState {
                   // the replica in the response to generate a new nextIndex. This allows
                   // us to skip repeatedly replicating one entry at a time if it's not
                   // necessary.
-                  nextIndex = response.logIndex() != null ? response.logIndex() - 1
-                    : context.log().firstIndex();
+                  nextIndex = response.logIndex() != null ? Long.valueOf(response.logIndex() - 1)
+                    : prevIndex != null ? prevIndex : context.log().firstIndex();
                   doCommit();
                 }
               }
             } else {
-              triggerCommitFutures(prevIndex != null ? prevIndex + 1 : context.log().firstIndex(),
-                prevIndex != null ? prevIndex + entries.size() : context.log().firstIndex() + entries.size() - 1,
+              triggerCommitFutures(prevIndex != null ? Long.valueOf(prevIndex + 1) : context.log().firstIndex(),
+                prevIndex != null ? Long.valueOf(prevIndex + entries.size()) : Long.valueOf(context.log().firstIndex() + entries.size() - 1),
                 response.error());
               doCommit();
             }
@@ -537,7 +537,7 @@ class LeaderState extends ActiveState {
       }
       commitFuture = nextCommitFuture != null ? nextCommitFuture : commitFuture;
       nextCommitFuture = null;
-      if (endIndex >= startIndex) {
+      if (startIndex != null && endIndex != null && endIndex >= startIndex) {
         for (long i = startIndex; i <= endIndex; i++) {
           CompletableFuture<Long> future = commitFutures.remove(i);
           if (future != null) {
@@ -556,7 +556,7 @@ class LeaderState extends ActiveState {
       }
       commitFuture = nextCommitFuture != null ? nextCommitFuture : commitFuture;
       nextCommitFuture = null;
-      if (endIndex >= startIndex) {
+      if (startIndex != null && endIndex != null && endIndex >= startIndex) {
         for (long i = startIndex; i <= endIndex; i++) {
           CompletableFuture<Long> future = commitFutures.remove(i);
           if (future != null) {
