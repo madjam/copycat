@@ -503,9 +503,6 @@ class LeaderState extends ActiveState {
                 triggerCommitFutures(prevIndex != null ? Long.valueOf(prevIndex + 1) : context.log().firstIndex(), matchIndex);
               } else {
                 if (response.term() > context.getTerm()) {
-                  triggerCommitFutures(prevIndex != null ? Long.valueOf(prevIndex + 1) : context.log().firstIndex(),
-                    prevIndex != null ? Long.valueOf(prevIndex + entries.size()) : Long.valueOf(context.log().firstIndex() + entries.size() - 1),
-                    new CopycatException("Not the leader"));
                   transition(CopycatState.FOLLOWER);
                 } else {
                   // If replication failed then use the last log index indicated by
