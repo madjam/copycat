@@ -295,7 +295,7 @@ class LeaderState extends ActiveState {
         } else {
           future.completeExceptionally(new IllegalStateException("Failed to heartbeat cluster"));
         }
-      });
+      }).countSelf();
 
       for (Replica replica : replicas) {
         replica.commit().whenComplete((result, error) -> {
