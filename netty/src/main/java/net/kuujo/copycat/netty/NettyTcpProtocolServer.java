@@ -178,10 +178,14 @@ public class NettyTcpProtocolServer implements ProtocolServer {
 
       if (server.handler != null) {
         context.channel().eventLoop().submit(() -> server.handler.apply(request.slice().nioBuffer()).whenComplete((result, error) -> {
-          ByteBuf responseBuffer = context.alloc().buffer(request.readableBytes() + 12);
-          responseBuffer.writeLong(requestId);
-          responseBuffer.writeBytes(result);
-          context.writeAndFlush(responseBuffer);
+          try {
+        	ByteBuf responseBuffer = context.alloc().buffer(request.readableBytes() + 12);
+        	responseBuffer.writeLong(requestId);
+        	responseBuffer.writeBytes(result);
+        	context.writeAndFlush(responseBuffer);
+          } finally {
+        	request.release();  
+          }
         }));
       }
     }
