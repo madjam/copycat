@@ -515,13 +515,13 @@ class LeaderState extends ActiveState {
                 if (response.term() > context.getTerm()) {
                   transition(CopycatState.FOLLOWER);
                 } else {
-                  // If replication failed then use the last log index indicated by
-                  // the replica in the response to generate a new nextIndex. This allows
-                  // us to skip repeatedly replicating one entry at a time if it's not
-                  // necessary.
-                  nextIndex = response.logIndex() != null ? Long.valueOf(response.logIndex() - 1)
-                    : prevIndex != null ? prevIndex : context.log().firstIndex();
-                  doCommit();
+                  resetMatchIndex(response);
+                  resetNextIndex();
+
+                  // If there are more entries to send then attempt to send another commit.
+                  if (hasMoreEntries()) {
+                    doCommit();
+                  }
                 }
               }
             } else {
@@ -572,6 +572,36 @@ class LeaderState extends ActiveState {
         }
       }
     }
-  }
 
+    /**
+     * Returns a boolean value indicating whether there are more entries to send.
+     */
+    private boolean hasMoreEntries() {
+      return nextIndex != null && !context.log().isEmpty() && nextIndex < context.log().lastIndex();
+    }
+
+    /**
+     * Resets the match index when a response fails.
+     */
+    private void resetMatchIndex(AppendResponse response) {
+      if (matchIndex == null) {
+        matchIndex = response.logIndex();
+      } else if (response.logIndex() != null) {
+        matchIndex = Math.max(matchIndex, response.logIndex());
+      }
+      LOGGER.debug("{} - Reset match index for {} to {}", context.getLocalMember(), member, matchIndex);
+    }
+
+    /**
+     * Resets the next index when a response fails.
+     */
+    private void resetNextIndex() {
+      if (matchIndex != null) {
+        nextIndex = matchIndex + 1;
+      } else {
+        nextIndex = context.log().firstIndex();
+      }
+      LOGGER.debug("{} - Reset next index for {} to {}", context.getLocalMember(), member, nextIndex);
+    }
+  }
 }
