@@ -515,8 +515,7 @@ class LeaderState extends ActiveState {
                 if (response.term() > context.getTerm()) {
                   transition(CopycatState.FOLLOWER);
                 } else {
-                  resetMatchIndex(response);
-                  resetNextIndex();
+                  resetNextIndex(response);
 
                   // If there are more entries to send then attempt to send another commit.
                   if (hasMoreEntries()) {
@@ -581,23 +580,11 @@ class LeaderState extends ActiveState {
     }
 
     /**
-     * Resets the match index when a response fails.
-     */
-    private void resetMatchIndex(AppendResponse response) {
-      if (matchIndex == null) {
-        matchIndex = response.logIndex();
-      } else if (response.logIndex() != null) {
-        matchIndex = Math.max(matchIndex, response.logIndex());
-      }
-      LOGGER.debug("{} - Reset match index for {} to {}", context.getLocalMember(), member, matchIndex);
-    }
-
-    /**
      * Resets the next index when a response fails.
      */
-    private void resetNextIndex() {
-      if (matchIndex != null) {
-        nextIndex = matchIndex + 1;
+    private void resetNextIndex(AppendResponse response) {
+      if (response.logIndex() != null && response.logIndex() > 1) {
+        nextIndex = response.logIndex() - 1;
       } else {
         nextIndex = context.log().firstIndex();
       }
