@@ -151,6 +151,15 @@ public class MemberInfo implements Serializable {
    * @param info The member info to update.
    */
   public void update(MemberInfo info) {
+    // local node is always "ACTIVE"
+    // update version if the member info has a more recent value.
+    if (this.uri.equals(info.uri)) {
+      if (info.version > this.version) {
+        this.version = info.version;
+      }
+      return;
+    }
+
     // If the given version is greater than the current version then update the member state.
     if (info.version > this.version) {
       this.version = info.version;
