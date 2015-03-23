@@ -48,14 +48,6 @@ public class Quorum {
   }
 
   /**
-   * Counts self as a success outcome.
-   */
-  public Quorum countSelf() {
-    succeed();
-    return this;
-  }
-
-  /**
    * Indicates that a call in the quorum succeeded.
    */
   public Quorum succeed() {

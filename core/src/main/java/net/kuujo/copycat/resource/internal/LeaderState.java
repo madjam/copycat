@@ -276,7 +276,7 @@ class LeaderState extends ActiveState {
       }
 
       // Quorum is floor(replicas.size / 2) since this node is implicitly counted in the quorum count.
-      this.quorum = (int) Math.floor(context.getActiveMembers().size() / 2) + 1;
+      this.quorum = (int) Math.floor(context.getActiveMembers().size() / 2);
       this.quorumIndex = quorum - 1;
     }
 
@@ -295,7 +295,7 @@ class LeaderState extends ActiveState {
         } else {
           future.completeExceptionally(new IllegalStateException("Failed to heartbeat cluster"));
         }
-      }).countSelf();
+      });
 
       for (Replica replica : replicas) {
         replica.commit().whenComplete((result, error) -> {
@@ -347,7 +347,7 @@ class LeaderState extends ActiveState {
         // Sort the list of replicas, order by the last index that was replicated
         // to the replica. This will allow us to determine the median index
         // for all known replicated entries across all cluster members.
-        Collections.sort(replicas, (o1, o2) -> Long.compare(o1.matchIndex != null ? o1.matchIndex : 0L, o2.matchIndex != null ? o2.matchIndex : 0L));
+        Collections.sort(replicas, (o1, o2) -> Long.compare(o2.matchIndex != null ? o2.matchIndex : 0L, o1.matchIndex != null ? o1.matchIndex : 0L));
 
         // Set the current commit index as the median replicated index.
         // Since replicas is a list with zero based indexes, use the negation of
