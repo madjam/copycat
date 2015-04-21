@@ -24,13 +24,15 @@ import java.util.function.Consumer;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class Quorum {
+  private final int totalSize;
   private final int quorum;
   private int succeeded;
   private int failed;
   private Consumer<Boolean> callback;
   private boolean complete;
 
-  public Quorum(int quorum, Consumer<Boolean> callback) {
+  public Quorum(int totalSize, int quorum, Consumer<Boolean> callback) {
+    this.totalSize = totalSize;
     this.quorum = quorum;
     this.callback = callback;
   }
@@ -40,7 +42,7 @@ public class Quorum {
       if (succeeded >= quorum) {
         complete = true;
         callback.accept(true);
-      } else if (failed >= quorum) {
+      } else if (totalSize - failed < quorum) {
         complete = true;
         callback.accept(false);
       }

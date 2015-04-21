@@ -260,6 +260,7 @@ class LeaderState extends ActiveState {
   private class Replicator {
     private final Map<String, Replica> replicaMap;
     private final List<Replica> replicas;
+    private int replicaGroupSize;
     private int quorum;
     private int quorumIndex;
     private final TreeMap<Long, CompletableFuture<Long>> commitFutures = new TreeMap<>();
@@ -275,6 +276,7 @@ class LeaderState extends ActiveState {
         }
       }
 
+      this.replicaGroupSize = context.getActiveMembers().size() - 1;
       // Quorum is floor(replicas.size / 2) since this node is implicitly counted in the quorum count.
       this.quorum = (int) Math.floor(context.getActiveMembers().size() / 2);
       this.quorumIndex = quorum - 1;
@@ -289,7 +291,7 @@ class LeaderState extends ActiveState {
         return CompletableFuture.completedFuture(context.getCommitIndex());
       }
       CompletableFuture<Long> future = new CompletableFuture<>();
-      Quorum quorum = new Quorum(this.quorum, succeeded -> {
+      Quorum quorum = new Quorum(this.replicaGroupSize, this.quorum, succeeded -> {
         if (succeeded) {
           future.complete(context.getCommitIndex());
         } else {
