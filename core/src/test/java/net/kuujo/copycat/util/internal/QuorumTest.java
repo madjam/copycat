@@ -20,7 +20,7 @@ public class QuorumTest {
   @BeforeMethod
   protected void beforeMethod() {
     callbackResult = new AtomicInteger();
-    quorum = new Quorum(3, r -> {
+    quorum = new Quorum(5, 3, r -> {
       callbackResult.set(r ? 1 : 2);
     });
   }
