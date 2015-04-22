@@ -586,7 +586,7 @@ class LeaderState extends ActiveState {
      */
     private void resetNextIndex(AppendResponse response) {
       if (response.logIndex() != null && response.logIndex() > 1) {
-        nextIndex = response.logIndex() - 1;
+        nextIndex = Math.min(nextIndex - 1, response.logIndex() - 1);
       } else {
         nextIndex = context.log().firstIndex();
       }
