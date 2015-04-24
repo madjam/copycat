@@ -322,6 +322,9 @@ class LeaderState extends ActiveState {
      * @return A completable future to be completed once the given log index has been committed.
      */
     private CompletableFuture<Long> commit(long index) {
+      if (replicas.isEmpty()) {
+        return CompletableFuture.completedFuture(index);
+      }
       return commitFutures.computeIfAbsent(index, i -> {
         replicas.forEach(Replica::commit);
         return new CompletableFuture<>();
