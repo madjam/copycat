@@ -34,10 +34,15 @@ import javax.net.ssl.SSLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
+
 import java.nio.ByteBuffer;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
@@ -53,7 +58,17 @@ public class NettyTcpProtocolClient implements ProtocolClient {
   private final EventLoopGroup group;
   private final Bootstrap bootstrap;
   private Channel channel;
-  private final Map<Object, CompletableFuture<ByteBuffer>> responseFutures = new ConcurrentHashMap<>(1000);
+  private final Cache<Long, CompletableFuture<ByteBuffer>> responseFutures = CacheBuilder.newBuilder()
+      .expireAfterWrite(2000, TimeUnit.MILLISECONDS)
+      .removalListener(new RemovalListener<Long, CompletableFuture<ByteBuffer>>() {
+          @Override
+          public void onRemoval(RemovalNotification<Long, CompletableFuture<ByteBuffer>> entry) {
+              if (entry.wasEvicted()) {
+                  entry.getValue().completeExceptionally(new TimeoutException("Request timed out after 2000 ms"));
+              }
+          }
+      })
+      .build();
   private final AtomicLong requestId = new AtomicLong(0);
 
   private final Supplier<ChannelInboundHandlerAdapter> channelHandlerSupplier = () -> new SimpleChannelInboundHandler<byte[]>() {
@@ -62,8 +77,9 @@ public class NettyTcpProtocolClient implements ProtocolClient {
     protected void channelRead0(ChannelHandlerContext context, byte[] message) throws Exception {
       ByteBuffer buffer = ByteBuffer.wrap(message);
       long responseId = buffer.getLong();
-      CompletableFuture<ByteBuffer> responseFuture = responseFutures.remove(responseId);
+      CompletableFuture<ByteBuffer> responseFuture = responseFutures.getIfPresent(responseId);
       if (responseFuture != null) {
+        responseFutures.invalidate(responseId);
         responseFuture.complete(buffer.slice());
       } else {
         LOGGER.warn("No completable future for response Id {}", responseId);
@@ -135,7 +151,7 @@ public class NettyTcpProtocolClient implements ProtocolClient {
       responseFutures.put(requestId, future);
       channel.writeAndFlush(buffer.array()).addListener((channelFuture) -> {
         if (!channelFuture.isSuccess()) {
-          responseFutures.remove(requestId);
+          responseFutures.invalidate(requestId);
           future.completeExceptionally(new ProtocolException(channelFuture.cause()));
         }
       });
