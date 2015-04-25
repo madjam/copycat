@@ -97,7 +97,7 @@ class CandidateState extends ActiveState {
     // to this node will be automatically successful.
     // First check if the quorum is null. If the quorum isn't null then that
     // indicates that another vote is already going on.
-    final Quorum quorum = new Quorum((int) Math.ceil(context.getActiveMembers().size() / 2.0), (elected) -> {
+    final Quorum quorum = new Quorum(1 + (int) Math.floor(context.getActiveMembers().size() / 2.0), (elected) -> {
       complete.set(true);
       if (elected) {
         transition(RaftState.Type.LEADER);
@@ -126,7 +126,7 @@ class CandidateState extends ActiveState {
         context.checkThread();
         if (isOpen() && !complete.get()) {
           if (error != null) {
-            LOGGER.warn(context.getLocalMember(), error);
+            LOGGER.warn("{} - Failed vote request to {}. Reason: {}", context.getLocalMember(), member, error.getMessage());
             quorum.fail();
           } else if (response.term() > context.getTerm()) {
             LOGGER.debug("{} - Received greater term from {}", context.getLocalMember(), member);

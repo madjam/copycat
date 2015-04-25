@@ -97,7 +97,7 @@ class FollowerState extends ActiveState {
 
     // Create a quorum that will track the number of nodes that have responded to the poll request.
     final AtomicBoolean complete = new AtomicBoolean();
-    final Quorum quorum = new Quorum((int) Math.ceil(context.getActiveMembers().size() / 2.0), (elected) -> {
+    final Quorum quorum = new Quorum(1 + (int) Math.floor(context.getActiveMembers().size() / 2.0), (elected) -> {
       // If a majority of the cluster indicated they would vote for us then transition to candidate.
       complete.set(true);
       if (elected) {
@@ -129,7 +129,7 @@ class FollowerState extends ActiveState {
         context.checkThread();
         if (isOpen() && !complete.get()) {
           if (error != null) {
-            LOGGER.warn(context.getLocalMember(), error);
+            LOGGER.warn("{} - Failed to poll {}. Reason: {}", context.getLocalMember(), member, error.getMessage());
             quorum.fail();
           } else {
             if (response.term() > context.getTerm()) {

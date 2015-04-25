@@ -25,6 +25,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.collect.Ordering;
+
 /**
  * Leader state.
  *
@@ -287,7 +289,7 @@ class LeaderState extends ActiveState {
       for (String member : context.getActiveMembers()) {
         if (!member.equals(context.getLocalMember())) {
           replicas.add(new Replica(i++, member));
-          commitTimes.add(System.currentTimeMillis());
+          commitTimes.add(System.nanoTime());
         }
       }
 
@@ -304,7 +306,7 @@ class LeaderState extends ActiveState {
     private CompletableFuture<Void> commit() {
       if (commitFuture == null) {
         commitFuture = new CompletableFuture<>();
-        commitTime = System.currentTimeMillis();
+        commitTime = System.nanoTime();
         replicas.forEach(Replica::commit);
         return commitFuture;
       } else if (nextCommitFuture == null) {
@@ -335,19 +337,19 @@ class LeaderState extends ActiveState {
      * Sets a commit time.
      */
     private void commitTime(int id) {
-      commitTimes.set(id, System.currentTimeMillis());
+      commitTimes.set(id, System.nanoTime());
 
       // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
       // was contacted. If the current commitFuture's time is less than the commit time then trigger the
       // commit future and reset it to the next commit future.
-      Collections.sort(commitTimes);
-      long commitTime = commitTimes.get(quorumIndex);
-      if (commitFuture != null && this.commitTime >= commitTime) {
+      List<Long> sortedCommitTimes = Ordering.natural().reverse().sortedCopy(commitTimes);
+      long commitTime = sortedCommitTimes.get(quorumIndex);
+      if (commitFuture != null && this.commitTime < commitTime) {
         commitFuture.complete(null);
         commitFuture = nextCommitFuture;
         nextCommitFuture = null;
         if (this.commitFuture != null) {
-          this.commitTime = System.currentTimeMillis();
+          this.commitTime = System.nanoTime();
           replicas.forEach(Replica::commit);
         }
       }
@@ -536,7 +538,7 @@ class LeaderState extends ActiveState {
                 LOGGER.warn("{} - {}", context.getLocalMember(), response.error() != null ? response.error().getMessage() : "");
               }
             } else {
-              LOGGER.warn("{} - {}", context.getLocalMember(), error.getMessage());
+              LOGGER.debug("{} - {}", context.getLocalMember(), error.getMessage());
             }
           }
         }, context.executor());
@@ -588,6 +590,8 @@ class LeaderState extends ActiveState {
           matchIndex = response.logIndex();
         } else if (response.logIndex() != null) {
           matchIndex = Math.max(matchIndex, response.logIndex());
+        } else if (response.logIndex() == null) {
+          matchIndex = null;
         }
         LOGGER.debug("{} - Reset match index for {} to {}", context.getLocalMember(), member, matchIndex);
       }
