@@ -28,6 +28,7 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import net.kuujo.copycat.protocol.ProtocolClient;
 import net.kuujo.copycat.protocol.ProtocolException;
+import net.kuujo.copycat.util.concurrent.NamedThreadFactory;
 
 import javax.net.ssl.SSLException;
 
@@ -41,6 +42,8 @@ import com.google.common.cache.RemovalNotification;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -70,6 +73,7 @@ public class NettyTcpProtocolClient implements ProtocolClient {
       })
       .build();
   private final AtomicLong requestId = new AtomicLong(0);
+  private final ScheduledExecutorService cacheCleaner;
 
   private final Supplier<ChannelInboundHandlerAdapter> channelHandlerSupplier = () -> new SimpleChannelInboundHandler<byte[]>() {
 
@@ -138,6 +142,10 @@ public class NettyTcpProtocolClient implements ProtocolClient {
     bootstrap.option(ChannelOption.SO_LINGER, protocol.getSoLinger());
     bootstrap.option(ChannelOption.SO_KEEPALIVE, true);
     bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, protocol.getConnectTimeout());
+
+    // Periodic cache cleanup is necessary to expire entries from cache.
+    cacheCleaner = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(String.format("netty-reponse-cache-cleaner-%s:%d", host, port)));
+    cacheCleaner.scheduleWithFixedDelay(responseFutures::cleanUp, 0, 2000, TimeUnit.MILLISECONDS);
   }
 
   @Override
@@ -182,6 +190,7 @@ public class NettyTcpProtocolClient implements ProtocolClient {
 
   @Override
   public CompletableFuture<Void> close() {
+    cacheCleaner.shutdown();
     final CompletableFuture<Void> future = new CompletableFuture<>();
     if (channel != null) {
       channel.close().addListener(channelFuture -> {

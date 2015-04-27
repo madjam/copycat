@@ -33,7 +33,7 @@ import com.google.common.collect.Ordering;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 class LeaderState extends ActiveState {
-  private static final int MAX_BATCH_SIZE = 1024 * 32;
+  private static final int MAX_BATCH_SIZE = 1024 * 512;
   private ScheduledFuture<?> currentTimer;
   private final Replicator replicator = new Replicator();
 
@@ -538,7 +538,7 @@ class LeaderState extends ActiveState {
                 LOGGER.warn("{} - {}", context.getLocalMember(), response.error() != null ? response.error().getMessage() : "");
               }
             } else {
-              LOGGER.debug("{} - {}", context.getLocalMember(), error.getMessage());
+              LOGGER.warn("{} - {}", context.getLocalMember(), error.getMessage());
             }
           }
         }, context.executor());
