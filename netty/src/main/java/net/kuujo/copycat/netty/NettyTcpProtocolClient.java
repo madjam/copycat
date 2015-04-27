@@ -61,12 +61,12 @@ public class NettyTcpProtocolClient implements ProtocolClient {
   private final Cache<Long, CompletableFuture<ByteBuffer>> responseFutures = CacheBuilder.newBuilder()
       .expireAfterWrite(2000, TimeUnit.MILLISECONDS)
       .removalListener(new RemovalListener<Long, CompletableFuture<ByteBuffer>>() {
-          @Override
-          public void onRemoval(RemovalNotification<Long, CompletableFuture<ByteBuffer>> entry) {
-              if (entry.wasEvicted()) {
-                  entry.getValue().completeExceptionally(new TimeoutException("Request timed out after 2000 ms"));
-              }
+        @Override
+        public void onRemoval(RemovalNotification<Long, CompletableFuture<ByteBuffer>> entry) {
+          if (entry.wasEvicted()) {
+            entry.getValue().completeExceptionally(new TimeoutException("Request timed out after 2000 ms"));
           }
+        }
       })
       .build();
   private final AtomicLong requestId = new AtomicLong(0);
@@ -143,7 +143,7 @@ public class NettyTcpProtocolClient implements ProtocolClient {
   @Override
   public CompletableFuture<ByteBuffer> write(ByteBuffer request) {
     final CompletableFuture<ByteBuffer> future = new CompletableFuture<>();
-    if (channel != null) {
+    if (channel != null && channel.isActive()) {
       long requestId = this.requestId.incrementAndGet();
       ByteBuffer buffer = ByteBuffer.allocate(request.limit() + 8);
       buffer.putLong(requestId);
@@ -151,8 +151,8 @@ public class NettyTcpProtocolClient implements ProtocolClient {
       responseFutures.put(requestId, future);
       channel.writeAndFlush(buffer.array()).addListener((channelFuture) -> {
         if (!channelFuture.isSuccess()) {
-          responseFutures.invalidate(requestId);
           future.completeExceptionally(new ProtocolException(channelFuture.cause()));
+          responseFutures.invalidate(requestId);
         }
       });
     } else {
@@ -164,7 +164,7 @@ public class NettyTcpProtocolClient implements ProtocolClient {
   @Override
   public CompletableFuture<Void> connect() {
     final CompletableFuture<Void> future = new CompletableFuture<>();
-    if (channel != null && channel.isOpen()) {
+    if (channel != null && channel.isActive()) {
       future.complete(null);
       return future;
     }
