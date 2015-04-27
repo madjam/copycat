@@ -279,6 +279,7 @@ class LeaderState extends ActiveState {
     private long commitTime;
     private CompletableFuture<Void> commitFuture;
     private CompletableFuture<Void> nextCommitFuture;
+    private long commitFailures;
     private final TreeMap<Long, CompletableFuture<Long>> commitFutures = new TreeMap<>();
 
     @SuppressWarnings("all")
@@ -336,19 +337,35 @@ class LeaderState extends ActiveState {
     /**
      * Sets a commit time.
      */
-    private void commitTime(int id) {
-      commitTimes.set(id, System.nanoTime());
-
-      // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
-      // was contacted. If the current commitFuture's time is less than the commit time then trigger the
-      // commit future and reset it to the next commit future.
-      List<Long> sortedCommitTimes = Ordering.natural().reverse().sortedCopy(commitTimes);
-      long commitTime = sortedCommitTimes.get(quorumIndex);
-      if (commitFuture != null && this.commitTime < commitTime) {
-        commitFuture.complete(null);
-        commitFuture = nextCommitFuture;
-        nextCommitFuture = null;
-        if (this.commitFuture != null) {
+    private void commitTime(int id, Throwable error) {
+      if (commitFuture == null) {
+        return;
+      }
+      boolean completed = false;
+      synchronized (this) {
+        if (error != null) {
+          if (replicas.get(id).commitStartTime == commitTime && quorum > replicas.size() - ++commitFailures) {
+            commitFuture.completeExceptionally(new CopycatException("Failed to reach quorum"));
+            completed = true;
+          }
+        } else {
+          commitTimes.set(id, System.nanoTime());
+          // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
+          // was contacted. If the current commitFuture's time is less than the commit time then trigger the
+          // commit future and reset it to the next commit future.
+          List<Long> sortedCommitTimes = Ordering.natural().reverse().sortedCopy(commitTimes);
+          long commitTime = sortedCommitTimes.get(quorumIndex);
+          if (commitFuture != null && this.commitTime < commitTime) {
+            commitFuture.complete(null);
+            completed = true;
+          }
+          if (completed) {
+            commitFuture = nextCommitFuture;
+            nextCommitFuture = null;
+            commitFailures = 0;
+          }
+        }
+        if (completed && this.commitFuture != null) {
           this.commitTime = System.nanoTime();
           replicas.forEach(Replica::commit);
         }
@@ -393,6 +410,7 @@ class LeaderState extends ActiveState {
       private Long nextIndex;
       private Long matchIndex;
       private boolean committing;
+      private long commitStartTime;
 
       private Replica(int id, String member) {
         this.id = id;
@@ -404,6 +422,7 @@ class LeaderState extends ActiveState {
        */
       private void commit() {
         if (!committing && isOpen()) {
+          commitStartTime = commitTime;
           // If the log is empty then send an empty commit.
           // If the next index hasn't yet been set then we send an empty commit first.
           // If the next index is greater than the last index then send an empty commit.
@@ -504,7 +523,7 @@ class LeaderState extends ActiveState {
               LOGGER.debug("{} - Received {} from {}", context.getLocalMember(), response, member);
               if (response.status() == Response.Status.OK) {
                 // Update the commit time for the replica. This will cause heartbeat futures to be triggered.
-                commitTime(id);
+                commitTime(id, null);
 
                 // If replication succeeded then trigger commit futures.
                 if (response.succeeded()) {
@@ -539,6 +558,7 @@ class LeaderState extends ActiveState {
               }
             } else {
               LOGGER.warn("{} - {}", context.getLocalMember(), error.getMessage());
+              commitTime(id, error);
             }
           }
         }, context.executor());
