@@ -45,7 +45,7 @@ public abstract class ResourceConfig<T extends ResourceConfig<T>> extends Abstra
 
   private static final String CONFIGURATION = "resource";
   private static final String DEFAULT_CONFIGURATION = "resource-defaults";
-  private static final Serializer DEFAULT_SERIALIZER = new KryoSerializer();
+  private Serializer defaultSerializer;
 
   private Executor executor;
 
@@ -91,6 +91,38 @@ public abstract class ResourceConfig<T extends ResourceConfig<T>> extends Abstra
   }
 
   /**
+   * Returns the resource entry default serializer.
+   *
+   * @return The resource entry default serializer.
+   */
+  public Serializer getDefaultSerializer() {
+      return defaultSerializer != null ? defaultSerializer : new KryoSerializer();
+  }
+
+  /**
+   * Sets the resource default serializer.
+   *
+   * @param serializer The resource default serializer.
+   * @throws java.lang.NullPointerException If the serializer is {@code null}
+   */
+  public void setDefaultSerializer(Serializer serializer) {
+    this.defaultSerializer = Assert.isNotNull(serializer, "serializer");
+  }
+
+  /**
+   * Sets the resource entry defaultSerializer, returning the configuration for method chaining.
+   *
+   * @param serializer The resource entry default serializer.
+   * @return The resource configuration.
+   * @throws java.lang.NullPointerException If the serializer is {@code null}
+   */
+  @SuppressWarnings("unchecked")
+  public T withDefaultSerializer(Serializer serializer) {
+    setDefaultSerializer(serializer);
+    return (T) this;
+  }
+
+  /**
    * Sets the resource entry serializer.
    *
    * @param serializer The resource entry serializer.
@@ -122,7 +154,7 @@ public abstract class ResourceConfig<T extends ResourceConfig<T>> extends Abstra
    * @throws net.kuujo.copycat.util.ConfigurationException If the resource serializer configuration is malformed
    */
   public Serializer getSerializer() {
-    return config.hasPath(RESOURCE_SERIALIZER) ? Configurable.load(config.getObject(RESOURCE_SERIALIZER).unwrapped()) : DEFAULT_SERIALIZER;
+    return config.hasPath(RESOURCE_SERIALIZER) ? Configurable.load(config.getObject(RESOURCE_SERIALIZER).unwrapped()) : getDefaultSerializer();
   }
 
   /**

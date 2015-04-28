@@ -46,9 +46,13 @@ public class CoordinatedResourceConfig extends AbstractConfigurable {
   private static final String RESOURCE_LOG = "log";
   private static final String RESOURCE_SERIALIZER = "serializer";
 
+  private Serializer serializer;
   private Serializer defaultSerializer = new KryoSerializer();
   private Executor defaultExecutor;
   private Executor executor;
+
+  @SuppressWarnings("rawtypes")
+  private Class<? extends Resource> resourceTypeClass;
 
   public CoordinatedResourceConfig() {
     super();
@@ -109,7 +113,7 @@ public class CoordinatedResourceConfig extends AbstractConfigurable {
    */
   @SuppressWarnings("rawtypes")
   public void setResourceType(Class<? extends Resource> type) {
-    this.config = config.withValue(RESOURCE_TYPE, ConfigValueFactory.fromAnyRef(Assert.isNotNull(type, "type").getName()));
+    this.resourceTypeClass = Assert.isNotNull(type, "type");
   }
 
   /**
@@ -120,7 +124,9 @@ public class CoordinatedResourceConfig extends AbstractConfigurable {
   @SuppressWarnings({"unchecked", "rawtypes"})
   public Class<? extends Resource> getResourceType() {
     try {
-      return (Class<? extends Resource>) Class.forName(config.getString(RESOURCE_TYPE));
+      return (resourceTypeClass != null)
+          ? resourceTypeClass
+          : (Class<? extends Resource>) Class.forName(config.getString(RESOURCE_TYPE));
     } catch (ClassNotFoundException e) {
       throw new ConfigurationException("Failed to load resource class", e);
     }
@@ -412,7 +418,7 @@ public class CoordinatedResourceConfig extends AbstractConfigurable {
    * @throws java.lang.NullPointerException If the serializer is {@code null}
    */
   public void setSerializer(Serializer serializer) {
-    this.config = config.withValue(RESOURCE_SERIALIZER, ConfigValueFactory.fromMap(Assert.isNotNull(serializer, "serializer").toMap()));
+    this.serializer = serializer;
   }
 
   /**
@@ -422,7 +428,7 @@ public class CoordinatedResourceConfig extends AbstractConfigurable {
    * @throws net.kuujo.copycat.util.ConfigurationException If the resource serializer configuration is malformed
    */
   public Serializer getSerializer() {
-    return config.hasPath(RESOURCE_SERIALIZER) ? Configurable.load(config.getObject(RESOURCE_SERIALIZER).unwrapped()) : defaultSerializer;
+    return serializer != null ? serializer : config.hasPath(RESOURCE_SERIALIZER) ? Configurable.load(config.getObject(RESOURCE_SERIALIZER).unwrapped()) : defaultSerializer;
   }
 
   /**

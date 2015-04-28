@@ -18,12 +18,27 @@ package net.kuujo.copycat.util.serializer;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.ByteBufferInput;
 import com.esotericsoftware.kryo.io.ByteBufferOutput;
-import com.typesafe.config.ConfigObject;
 import com.typesafe.config.ConfigValueFactory;
+
+import net.kuujo.copycat.cluster.internal.MemberInfo;
+import net.kuujo.copycat.raft.protocol.AppendRequest;
+import net.kuujo.copycat.raft.protocol.AppendResponse;
+import net.kuujo.copycat.raft.protocol.CommitRequest;
+import net.kuujo.copycat.raft.protocol.CommitResponse;
+import net.kuujo.copycat.raft.protocol.PollRequest;
+import net.kuujo.copycat.raft.protocol.PollResponse;
+import net.kuujo.copycat.raft.protocol.QueryRequest;
+import net.kuujo.copycat.raft.protocol.QueryResponse;
+import net.kuujo.copycat.raft.protocol.ReplicaInfo;
+import net.kuujo.copycat.raft.protocol.SyncRequest;
+import net.kuujo.copycat.raft.protocol.SyncResponse;
+import net.kuujo.copycat.raft.protocol.VoteRequest;
+import net.kuujo.copycat.raft.protocol.VoteResponse;
 import net.kuujo.copycat.util.ConfigurationException;
 import net.kuujo.copycat.util.internal.Assert;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -37,6 +52,24 @@ public class KryoSerializer extends SerializerConfig {
   private static final String KRYO_SERIALIZER_REGISTRATIONS = "registrations";
 
   private static final int DEFAULT_KRYO_SERIALIZER_BUFFER_SIZE = 1024 * 1024 * 16;
+
+  private static Map<String, Object> idToClassMap = new HashMap<>();
+  static {
+    idToClassMap.put(String.valueOf(101), SyncRequest.class);
+    idToClassMap.put(String.valueOf(102), SyncResponse.class);
+    idToClassMap.put(String.valueOf(103), PollRequest.class);
+    idToClassMap.put(String.valueOf(104), PollResponse.class);
+    idToClassMap.put(String.valueOf(105), VoteRequest.class);
+    idToClassMap.put(String.valueOf(106), VoteResponse.class);
+    idToClassMap.put(String.valueOf(107), AppendRequest.class);
+    idToClassMap.put(String.valueOf(108), AppendResponse.class);
+    idToClassMap.put(String.valueOf(109), QueryRequest.class);
+    idToClassMap.put(String.valueOf(110), QueryResponse.class);
+    idToClassMap.put(String.valueOf(111), CommitRequest.class);
+    idToClassMap.put(String.valueOf(112), CommitResponse.class);
+    idToClassMap.put(String.valueOf(113), ReplicaInfo.class);
+    idToClassMap.put(String.valueOf(114), MemberInfo.class);
+  }
 
   private Kryo kryo = new Kryo();
   private ByteBufferOutput output;
@@ -75,18 +108,18 @@ public class KryoSerializer extends SerializerConfig {
    */
   @SuppressWarnings({"rawtypes"})
   private void register() {
-    if (config.hasPath(KRYO_SERIALIZER_REGISTRATIONS)) {
-      ConfigObject config = this.config.getObject(KRYO_SERIALIZER_REGISTRATIONS);
-      for (Map.Entry<String, Object> entry : config.unwrapped().entrySet()) {
-        Object type = entry.getValue();
-        if (type instanceof Class) {
-          register((Class) type, Integer.valueOf(entry.getKey()));
-        } else if (type instanceof String) {
-          try {
-            register(Class.forName(type.toString()), Integer.valueOf(entry.getKey()));
-          } catch (ClassNotFoundException e) {
-            throw new ConfigurationException("Failed to register serializer class", e);
-          }
+    Map<String, Object> regMap = config.hasPath(KRYO_SERIALIZER_REGISTRATIONS)
+            ? this.config.getObject(KRYO_SERIALIZER_REGISTRATIONS).unwrapped()
+            : idToClassMap;
+    for (Map.Entry<String, Object> entry : regMap.entrySet()) {
+      Object type = entry.getValue();
+      if (type instanceof Class) {
+        register((Class) type, Integer.valueOf(entry.getKey()));
+      } else if (type instanceof String) {
+        try {
+          register(Class.forName(type.toString()), Integer.valueOf(entry.getKey()));
+        } catch (ClassNotFoundException e) {
+          throw new ConfigurationException("Failed to register serializer class", e);
         }
       }
     }
