@@ -126,7 +126,7 @@ class CandidateState extends ActiveState {
         context.checkThread();
         if (isOpen() && !complete.get()) {
           if (error != null) {
-            LOGGER.info("{} - Failed vote request to {}. Reason: {}", context.getLocalMember(), member, error.getMessage());
+            LOGGER.debug("{} - Failed vote request to {}. Reason: {}", context.getLocalMember(), member, error.getMessage());
             quorum.fail();
           } else if (response.term() > context.getTerm()) {
             LOGGER.debug("{} - Received greater term from {}", context.getLocalMember(), member);

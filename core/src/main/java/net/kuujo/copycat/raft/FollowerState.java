@@ -129,7 +129,7 @@ class FollowerState extends ActiveState {
         context.checkThread();
         if (isOpen() && !complete.get()) {
           if (error != null) {
-            LOGGER.info("{} - Failed to poll {}. Reason: {}", context.getLocalMember(), member, error.getMessage());
+            LOGGER.debug("{} - Failed to poll {}. Reason: {}", context.getLocalMember(), member, error.getMessage());
             quorum.fail();
           } else {
             if (response.term() > context.getTerm()) {
