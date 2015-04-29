@@ -23,7 +23,7 @@
   </parent>
 
   <artifactId>copycat-api</artifactId>
-  <name>Copycat API</name>
+  <name>Copycat api</name>
 
   <dependencies>
     <dependency>
