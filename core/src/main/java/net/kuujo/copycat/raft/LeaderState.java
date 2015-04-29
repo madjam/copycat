@@ -560,7 +560,7 @@ class LeaderState extends ActiveState {
                 LOGGER.warn("{} - {}", context.getLocalMember(), response.error() != null ? response.error().getMessage() : "");
               }
             } else {
-              LOGGER.warn("{} - {}", context.getLocalMember(), error.getMessage());
+              LOGGER.debug("{} - {}", context.getLocalMember(), error.getMessage());
               commitTime(id, error);
             }
           }
