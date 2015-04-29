@@ -305,6 +305,9 @@ class LeaderState extends ActiveState {
      * @return A completable future to be completed the next time entries are committed to a majority of the cluster.
      */
     private CompletableFuture<Void> commit() {
+      if (replicas.isEmpty()) {
+        return CompletableFuture.completedFuture(null);
+      }
       if (commitFuture == null) {
         commitFuture = new CompletableFuture<>();
         commitTime = System.nanoTime();
