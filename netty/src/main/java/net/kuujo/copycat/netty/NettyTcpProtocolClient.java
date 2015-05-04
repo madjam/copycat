@@ -62,12 +62,12 @@ public class NettyTcpProtocolClient implements ProtocolClient {
   private final Bootstrap bootstrap;
   private Channel channel;
   private final Cache<Long, CompletableFuture<ByteBuffer>> responseFutures = CacheBuilder.newBuilder()
-      .expireAfterWrite(2000, TimeUnit.MILLISECONDS)
+      .expireAfterWrite(5000, TimeUnit.MILLISECONDS)
       .removalListener(new RemovalListener<Long, CompletableFuture<ByteBuffer>>() {
         @Override
         public void onRemoval(RemovalNotification<Long, CompletableFuture<ByteBuffer>> entry) {
           if (entry.wasEvicted()) {
-            entry.getValue().completeExceptionally(new TimeoutException("Request timed out after 2000 ms"));
+            entry.getValue().completeExceptionally(new TimeoutException("Request timed out after 5000 ms"));
           }
         }
       })
@@ -86,7 +86,7 @@ public class NettyTcpProtocolClient implements ProtocolClient {
         responseFutures.invalidate(responseId);
         responseFuture.complete(buffer.slice());
       } else {
-        LOGGER.warn("No completable future for response Id {}", responseId);
+        LOGGER.debug("No completable future for response Id {}", responseId);
       }
     }
   };
