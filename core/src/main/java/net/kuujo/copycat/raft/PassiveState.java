@@ -152,7 +152,7 @@ public class PassiveState extends RaftState {
             }
           } else {
             // If the request failed then record the member as INACTIVE.
-            LOGGER.warn("{} - Sync to {} failed: {}", context.getLocalMember(), member, error.getMessage());
+            LOGGER.debug("{} - Sync to {} failed: {}", context.getLocalMember(), member, error.getMessage());
             future.completeExceptionally(error);
           }
         }
