@@ -38,6 +38,7 @@ public class CoordinatorConfig extends AbstractConfigurable {
 
   private final Executor DEFAULT_COORDINATOR_EXECUTOR = Executors.newSingleThreadExecutor(new NamedThreadFactory("copycat-coordinator-%d"));
 
+  private ClusterConfig clusterConfig;
   private Executor executor;
 
   public CoordinatorConfig() {
@@ -96,6 +97,7 @@ public class CoordinatorConfig extends AbstractConfigurable {
    */
   public void setClusterConfig(ClusterConfig cluster) {
     this.config = config.withValue(COORDINATOR_CLUSTER, ConfigValueFactory.fromMap(Assert.isNotNull(cluster, "config").toMap()));
+    this.clusterConfig = cluster;
   }
 
   /**
@@ -104,7 +106,7 @@ public class CoordinatorConfig extends AbstractConfigurable {
    * @return The Copycat cluster configuration.
    */
   public ClusterConfig getClusterConfig() {
-    return Configurable.load(config.getObject(COORDINATOR_CLUSTER).unwrapped());
+    return clusterConfig != null ? clusterConfig : Configurable.load(config.getObject(COORDINATOR_CLUSTER).unwrapped());
   }
 
   /**

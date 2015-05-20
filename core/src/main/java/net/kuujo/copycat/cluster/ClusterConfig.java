@@ -61,6 +61,8 @@ public class ClusterConfig extends AbstractConfigurable {
   private static final String CONFIGURATION = "cluster";
   private static final String DEFAULT_CONFIGURATION = "cluster-defaults";
 
+  private Protocol protocol;
+
   public ClusterConfig() {
     super(CONFIGURATION, DEFAULT_CONFIGURATION);
   }
@@ -90,6 +92,7 @@ public class ClusterConfig extends AbstractConfigurable {
    */
   public void setProtocol(Protocol protocol) {
     this.config = config.withValue(CLUSTER_PROTOCOL, ConfigValueFactory.fromMap(Assert.isNotNull(protocol, "protocol").toMap()));
+    this.protocol = protocol;
   }
 
   /**
@@ -98,7 +101,7 @@ public class ClusterConfig extends AbstractConfigurable {
    * @return The cluster protocol.
    */
   public Protocol getProtocol() {
-    return Configurable.load(config.getObject(CLUSTER_PROTOCOL).unwrapped());
+    return protocol != null ? protocol : Configurable.load(config.getObject(CLUSTER_PROTOCOL).unwrapped());
   }
 
   /**

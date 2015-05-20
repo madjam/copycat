@@ -42,6 +42,7 @@ public class CopycatConfig extends AbstractConfigurable {
   private static final String DEFAULT_CONFIGURATION = "copycat-default";
   private static final String CONFIGURATION = "copycat";
 
+  private ClusterConfig clusterConfig;
   private Serializer defaultSerializer;
   private Executor executor = Executors.newSingleThreadExecutor(new NamedThreadFactory("copycat-%d"));
 
@@ -105,6 +106,7 @@ public class CopycatConfig extends AbstractConfigurable {
    */
   public void setClusterConfig(ClusterConfig cluster) {
     this.config = config.withValue(COPYCAT_CLUSTER, ConfigValueFactory.fromMap(Assert.isNotNull(cluster, "cluster").toMap()));
+    this.clusterConfig = cluster;
   }
 
   /**
@@ -113,7 +115,7 @@ public class CopycatConfig extends AbstractConfigurable {
    * @return The Copycat cluster configuration.
    */
   public ClusterConfig getClusterConfig() {
-    return Configurable.load(config.getObject(COPYCAT_CLUSTER).unwrapped());
+    return clusterConfig != null ? clusterConfig : Configurable.load(config.getObject(COPYCAT_CLUSTER).unwrapped());
   }
 
   /**
