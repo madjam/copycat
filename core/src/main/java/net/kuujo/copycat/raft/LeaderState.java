@@ -612,7 +612,15 @@ class LeaderState extends ActiveState {
         if (matchIndex == null) {
           matchIndex = response.logIndex();
         } else if (response.logIndex() != null) {
-          matchIndex = Math.max(matchIndex, response.logIndex());
+          if (matchIndex == response.logIndex()) {
+              // we are dealing with a follower with potentially corrupted log!
+              LOGGER.warn("{} - Follower({}) rejected append request despite its last log "
+                      + "index being same as local matchIndex({}). Followers log is most likely corrupted. "
+                      + "Will force follower to remove all its log entries", context.getLocalMember(), member, matchIndex);
+              matchIndex = null;
+          } else {
+              matchIndex = Math.max(matchIndex, response.logIndex());
+          }
         } else if (response.logIndex() == null) {
           matchIndex = null;
         }
