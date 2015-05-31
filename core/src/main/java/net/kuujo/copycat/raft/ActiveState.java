@@ -121,14 +121,16 @@ abstract class ActiveState extends PassiveState {
 
     // If the previous entry term doesn't match the local previous term then reject the request.
     ByteBuffer entry = context.log().getEntry(request.logIndex());
-    if (entry.getLong() != request.logTerm()) {
-      LOGGER.warn("{} - Rejected {}: Request entry term does not match local log", context.getLocalMember(), request);
-      return AppendResponse.builder()
+    long localLogTerm = entry.getLong();
+    if (localLogTerm != request.logTerm()) {
+      AppendResponse response = AppendResponse.builder()
         .withUri(context.getLocalMember())
         .withTerm(context.getTerm())
         .withSucceeded(false)
         .withLogIndex(context.log().lastIndex())
         .build();
+      LOGGER.warn("{} - Rejected {}: Request entry term does not match local log. Local log term is {}. Replying with {}", context.getLocalMember(), request, localLogTerm, response);
+      return response;
     } else {
       return doAppendEntries(request);
     }
