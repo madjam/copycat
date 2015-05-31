@@ -612,10 +612,10 @@ class LeaderState extends ActiveState {
         if (matchIndex == null) {
           matchIndex = response.logIndex();
         } else if (response.logIndex() != null) {
-            matchIndex = matchIndex - 1L;
-            if (matchIndex == 0L) {
-                matchIndex = null;
-            }
+          matchIndex = Math.min(matchIndex - 1L, response.logIndex());
+          if (matchIndex == 0L) {
+            matchIndex = null;
+          }
         } else if (response.logIndex() == null) {
           matchIndex = null;
         }
