@@ -28,26 +28,12 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import net.kuujo.copycat.protocol.ProtocolClient;
 import net.kuujo.copycat.protocol.ProtocolException;
-import net.kuujo.copycat.util.concurrent.NamedThreadFactory;
 
 import javax.net.ssl.SSLException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
-
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 
 /**
  * Netty TCP protocol client.
@@ -55,38 +41,28 @@ import java.util.function.Supplier;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class NettyTcpProtocolClient implements ProtocolClient {
-  protected final Logger LOGGER = LoggerFactory.getLogger(getClass());
   private final String host;
   private final int port;
-  private final EventLoopGroup group;
-  private final Bootstrap bootstrap;
+  private final NettyTcpProtocol protocol;
+  private EventLoopGroup group;
   private Channel channel;
-  private final Cache<Long, CompletableFuture<ByteBuffer>> responseFutures = CacheBuilder.newBuilder()
-      .expireAfterWrite(5000, TimeUnit.MILLISECONDS)
-      .removalListener(new RemovalListener<Long, CompletableFuture<ByteBuffer>>() {
-        @Override
-        public void onRemoval(RemovalNotification<Long, CompletableFuture<ByteBuffer>> entry) {
-          if (entry.wasEvicted()) {
-            entry.getValue().completeExceptionally(new TimeoutException("Request timed out after 5000 ms"));
-          }
-        }
-      })
-      .build();
-  private final AtomicLong requestId = new AtomicLong(0);
-  private final ScheduledExecutorService cacheCleaner;
+  private ChannelHandlerContext context;
+  private final Map<Object, CompletableFuture<ByteBuffer>> responseFutures = new HashMap<>(1000);
+  private long requestId;
 
-  private final Supplier<ChannelInboundHandlerAdapter> channelHandlerSupplier = () -> new SimpleChannelInboundHandler<byte[]>() {
+  private final ChannelInboundHandlerAdapter channelHandler = new SimpleChannelInboundHandler<byte[]>() {
+    @Override
+    public void channelActive(ChannelHandlerContext context) {
+      NettyTcpProtocolClient.this.context = context;
+    }
 
     @Override
     protected void channelRead0(ChannelHandlerContext context, byte[] message) throws Exception {
       ByteBuffer buffer = ByteBuffer.wrap(message);
       long responseId = buffer.getLong();
-      CompletableFuture<ByteBuffer> responseFuture = responseFutures.getIfPresent(responseId);
+      CompletableFuture<ByteBuffer> responseFuture = responseFutures.remove(responseId);
       if (responseFuture != null) {
-        responseFutures.invalidate(responseId);
         responseFuture.complete(buffer.slice());
-      } else {
-        LOGGER.debug("No completable future for response Id {}", responseId);
       }
     }
   };
@@ -95,20 +71,52 @@ public class NettyTcpProtocolClient implements ProtocolClient {
   public NettyTcpProtocolClient(String host, int port, NettyTcpProtocol protocol) {
     this.host = host;
     this.port = port;
+    this.protocol = protocol;
+  }
+
+  @Override
+  public CompletableFuture<ByteBuffer> write(ByteBuffer request) {
+    final CompletableFuture<ByteBuffer> future = new CompletableFuture<>();
+    if (channel != null) {
+      long requestId = ++this.requestId;
+      ByteBuffer buffer = ByteBuffer.allocate(request.limit() + 8);
+      buffer.putLong(requestId);
+      buffer.put(request);
+      channel.writeAndFlush(buffer.array()).addListener((channelFuture) -> {
+        if (channelFuture.isSuccess()) {
+          responseFutures.put(requestId, future);
+        } else {
+          future.completeExceptionally(new ProtocolException(channelFuture.cause()));
+        }
+      });
+    } else {
+      future.completeExceptionally(new ProtocolException("Client not connected"));
+    }
+    return future;
+  }
+
+  @Override
+  public CompletableFuture<Void> connect() {
+    final CompletableFuture<Void> future = new CompletableFuture<>();
+    if (channel != null) {
+      future.complete(null);
+      return future;
+    }
 
     final SslContext sslContext;
     if (protocol.isSsl()) {
       try {
         sslContext = SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
       } catch (SSLException e) {
-        throw new ProtocolException(e);
+        future.completeExceptionally(e);
+        return future;
       }
     } else {
       sslContext = null;
     }
 
     group = new NioEventLoopGroup(protocol.getThreads());
-    bootstrap = new Bootstrap();
+    Bootstrap bootstrap = new Bootstrap();
     bootstrap.group(group)
       .channel(NioSocketChannel.class)
       .handler(new ChannelInitializer<SocketChannel>() {
@@ -122,7 +130,7 @@ public class NettyTcpProtocolClient implements ProtocolClient {
           pipeline.addLast("bytesDecoder", new ByteArrayDecoder());
           pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
           pipeline.addLast("bytesEncoder", new ByteArrayEncoder());
-          pipeline.addLast("handler", channelHandlerSupplier.get());
+          pipeline.addLast("handler", channelHandler);
         }
       });
 
@@ -143,40 +151,6 @@ public class NettyTcpProtocolClient implements ProtocolClient {
     bootstrap.option(ChannelOption.SO_KEEPALIVE, true);
     bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, protocol.getConnectTimeout());
 
-    // Periodic cache cleanup is necessary to expire entries from cache.
-    cacheCleaner = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(String.format("netty-reponse-cache-cleaner-%s:%d", host, port)));
-    cacheCleaner.scheduleWithFixedDelay(responseFutures::cleanUp, 0, 2000, TimeUnit.MILLISECONDS);
-  }
-
-  @Override
-  public CompletableFuture<ByteBuffer> write(ByteBuffer request) {
-    final CompletableFuture<ByteBuffer> future = new CompletableFuture<>();
-    if (channel != null && channel.isActive()) {
-      long requestId = this.requestId.incrementAndGet();
-      ByteBuffer buffer = ByteBuffer.allocate(request.limit() + 8);
-      buffer.putLong(requestId);
-      buffer.put(request);
-      responseFutures.put(requestId, future);
-      channel.writeAndFlush(buffer.array()).addListener((channelFuture) -> {
-        if (!channelFuture.isSuccess()) {
-          future.completeExceptionally(new ProtocolException(channelFuture.cause()));
-          responseFutures.invalidate(requestId);
-        }
-      });
-    } else {
-      future.completeExceptionally(new ProtocolException("Client not connected"));
-    }
-    return future;
-  }
-
-  @Override
-  public CompletableFuture<Void> connect() {
-    final CompletableFuture<Void> future = new CompletableFuture<>();
-    if (channel != null && channel.isActive()) {
-      future.complete(null);
-      return future;
-    }
-
     bootstrap.connect(host, port).addListener((ChannelFutureListener) channelFuture -> {
       if (channelFuture.isSuccess()) {
         channel = channelFuture.channel();
@@ -190,7 +164,6 @@ public class NettyTcpProtocolClient implements ProtocolClient {
 
   @Override
   public CompletableFuture<Void> close() {
-    cacheCleaner.shutdown();
     final CompletableFuture<Void> future = new CompletableFuture<>();
     if (channel != null) {
       channel.close().addListener(channelFuture -> {

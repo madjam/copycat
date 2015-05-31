@@ -19,13 +19,11 @@ import net.kuujo.copycat.cluster.internal.MemberInfo;
 import net.kuujo.copycat.protocol.Protocol;
 import net.kuujo.copycat.protocol.ProtocolClient;
 import net.kuujo.copycat.protocol.ProtocolException;
-import net.kuujo.copycat.util.concurrent.NamedThreadFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -37,7 +35,6 @@ import java.util.concurrent.TimeUnit;
 public class DefaultRemoteMemberCoordinator extends AbstractMemberCoordinator {
   private final ProtocolClient client;
   private final ScheduledExecutorService executor;
-  private final ScheduledExecutorService connectionCustodian;
 
   public DefaultRemoteMemberCoordinator(MemberInfo info, Protocol protocol, ScheduledExecutorService executor) {
     super(info);
@@ -51,7 +48,6 @@ public class DefaultRemoteMemberCoordinator extends AbstractMemberCoordinator {
       throw new ProtocolException(e);
     }
     this.executor = executor;
-    this.connectionCustodian = Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory(String.format("copycat-connection-custodian-%s", uri())));
   }
 
   @Override
@@ -91,10 +87,12 @@ public class DefaultRemoteMemberCoordinator extends AbstractMemberCoordinator {
   private CompletableFuture<Void> connect(CompletableFuture<Void> future) {
     if (isOpen()) {
       client.connect().whenComplete((result, error) -> {
-          // Connection set up and maintenance is done asynchronously.
-          connectionCustodian.schedule(() -> connect(), 100, TimeUnit.MILLISECONDS);
-        });
-      future.complete(null);
+        if (error == null) {
+          future.complete(null);
+        } else {
+          executor.schedule(() -> connect(future), 100, TimeUnit.MILLISECONDS);
+        }
+      });
     } else {
       future.completeExceptionally(new IllegalStateException("Member closed"));
     }
@@ -103,7 +101,6 @@ public class DefaultRemoteMemberCoordinator extends AbstractMemberCoordinator {
 
   @Override
   public synchronized CompletableFuture<Void> close() {
-    connectionCustodian.shutdown();
     return super.close().thenComposeAsync(v -> client.close(), executor);
   }
 
