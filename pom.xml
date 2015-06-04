@@ -9,7 +9,7 @@
 
   <groupId>org.onosproject</groupId>
   <artifactId>copycat-parent</artifactId>
-  <version>0.4.1.onos</version>
+  <version>0.5.0.onos-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Copycat</name>
   <description>Replicated state machine framework based on the Raft consensus algorithm. Fork based on http://github.com/kuujo/copycat</description>
