@@ -152,12 +152,22 @@ class LeaderState extends ActiveState {
     switch (request.consistency()) {
       // Consistency mode WEAK or DEFAULT is immediately evaluated and returned.
       case WEAK:
-      case DEFAULT:
         future.complete(logResponse(QueryResponse.builder()
           .withUri(context.getLocalMember())
           .withResult(consumer.apply(context.getTerm(), null, request.entry()))
           .build()));
         break;
+      // For DEFAULT consistency mode Copycat will ensure no other member could have become the leader.
+      // This is done by making sure time since last successful quorum commit is less than the time
+      // it takes for election to timeout
+      case DEFAULT:
+        if (System.currentTimeMillis() - replicator.commitTime() < context.getElectionTimeout()) {
+          future.complete(logResponse(QueryResponse.builder()
+            .withUri(context.getLocalMember())
+            .withResult(consumer.apply(context.getTerm(), null, request.entry()))
+            .build()));
+          break;
+        } // else fall through and handle as if Consistency mode is STRONG.
       // Consistency mode STRONG requires synchronous consistency check prior to applying the query.
       case STRONG:
         LOGGER.debug("{} - Synchronizing logs to index {} for read", context.getLocalMember(), context.log().lastIndex());
@@ -290,7 +300,7 @@ class LeaderState extends ActiveState {
       for (String member : context.getActiveMembers()) {
         if (!member.equals(context.getLocalMember())) {
           replicas.add(new Replica(i++, member));
-          commitTimes.add(System.nanoTime());
+          commitTimes.add(System.currentTimeMillis());
         }
       }
 
@@ -310,7 +320,7 @@ class LeaderState extends ActiveState {
       }
       if (commitFuture == null) {
         commitFuture = new CompletableFuture<>();
-        commitTime = System.nanoTime();
+        commitTime = System.currentTimeMillis();
         replicas.forEach(Replica::commit);
         return commitFuture;
       } else if (nextCommitFuture == null) {
@@ -338,6 +348,14 @@ class LeaderState extends ActiveState {
     }
 
     /**
+     * Returns the last time a majority of the cluster was contacted.
+     */
+    private long commitTime() {
+        List<Long> sortedCommitTimes = Ordering.natural().reverse().sortedCopy(commitTimes);
+        return sortedCommitTimes.get(quorumIndex);
+    }
+
+    /**
      * Sets a commit time.
      */
     private void commitTime(int id, Throwable error) {
@@ -352,13 +370,11 @@ class LeaderState extends ActiveState {
             completed = true;
           }
         } else {
-          commitTimes.set(id, System.nanoTime());
+          commitTimes.set(id, System.currentTimeMillis());
           // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
           // was contacted. If the current commitFuture's time is less than the commit time then trigger the
           // commit future and reset it to the next commit future.
-          List<Long> sortedCommitTimes = Ordering.natural().reverse().sortedCopy(commitTimes);
-          long commitTime = sortedCommitTimes.get(quorumIndex);
-          if (commitFuture != null && this.commitTime < commitTime) {
+          if (commitFuture != null && this.commitTime < commitTime()) {
             commitFuture.complete(null);
             completed = true;
           }
@@ -369,7 +385,7 @@ class LeaderState extends ActiveState {
           }
         }
         if (completed && this.commitFuture != null) {
-          this.commitTime = System.nanoTime();
+          this.commitTime = System.currentTimeMillis();
           replicas.forEach(Replica::commit);
         }
       }
