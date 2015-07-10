@@ -161,7 +161,7 @@ class LeaderState extends ActiveState {
       // This is done by making sure time since last successful quorum commit is less than the time
       // it takes for election to timeout
       case DEFAULT:
-        if (System.currentTimeMillis() - replicator.commitTime() < context.getElectionTimeout()) {
+        if (System.nanoTime() - replicator.commitTime() < context.getElectionTimeout() * 1000L) {
           future.complete(logResponse(QueryResponse.builder()
             .withUri(context.getLocalMember())
             .withResult(consumer.apply(context.getTerm(), null, request.entry()))
@@ -300,7 +300,7 @@ class LeaderState extends ActiveState {
       for (String member : context.getActiveMembers()) {
         if (!member.equals(context.getLocalMember())) {
           replicas.add(new Replica(i++, member));
-          commitTimes.add(System.currentTimeMillis());
+          commitTimes.add(System.nanoTime());
         }
       }
 
@@ -320,7 +320,7 @@ class LeaderState extends ActiveState {
       }
       if (commitFuture == null) {
         commitFuture = new CompletableFuture<>();
-        commitTime = System.currentTimeMillis();
+        commitTime = System.nanoTime();
         replicas.forEach(Replica::commit);
         return commitFuture;
       } else if (nextCommitFuture == null) {
@@ -370,7 +370,7 @@ class LeaderState extends ActiveState {
             completed = true;
           }
         } else {
-          commitTimes.set(id, System.currentTimeMillis());
+          commitTimes.set(id, System.nanoTime());
           // Sort the list of commit times. Use the quorum index to get the last time the majority of the cluster
           // was contacted. If the current commitFuture's time is less than the commit time then trigger the
           // commit future and reset it to the next commit future.
@@ -385,7 +385,7 @@ class LeaderState extends ActiveState {
           }
         }
         if (completed && this.commitFuture != null) {
-          this.commitTime = System.currentTimeMillis();
+          this.commitTime = System.nanoTime();
           replicas.forEach(Replica::commit);
         }
       }
