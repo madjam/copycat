@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 public class DefaultStateMachine<T> extends AbstractResource<StateMachine<T>> implements StateMachine<T> {
   private final Class<T> stateType;
   private T state;
+  private ClassLoader classLoader;
   private final StateLog<List<Object>> log;
   private final InvocationHandler handler = new StateProxyInvocationHandler();
   private Map<String, Object> data = new HashMap<>(1024);
@@ -85,16 +86,21 @@ public class DefaultStateMachine<T> extends AbstractResource<StateMachine<T>> im
   };
 
   public DefaultStateMachine(ResourceManager context, Class<T> stateType, Class<? extends T> initialState) {
-    super(context);
-    this.stateType = Assert.isNotNull(stateType, "stateType");
-    try {
-      this.state = Assert.isNotNull(initialState, "initialState").newInstance();
-    } catch (InstantiationException | IllegalAccessException e) {
-      throw new RuntimeException(e);
-    }
-    this.log = new DefaultStateLog<>(context);
-    registerCommands();
+      this(context, stateType, initialState, DefaultStateMachine.class.getClassLoader());
   }
+
+  public DefaultStateMachine(ResourceManager context, Class<T> stateType, Class<? extends T> initialState, ClassLoader classLoader) {
+      super(context);
+      this.stateType = Assert.isNotNull(stateType, "stateType");
+      try {
+        this.state = Assert.isNotNull(initialState, "initialState").newInstance();
+      } catch (InstantiationException | IllegalAccessException e) {
+        throw new RuntimeException(e);
+      }
+      this.log = new DefaultStateLog<>(context);
+      registerCommands();
+      this.classLoader = classLoader;
+    }
 
   @Override
   public <U> U createProxy(Class<U> type) {
@@ -127,11 +133,10 @@ public class DefaultStateMachine<T> extends AbstractResource<StateMachine<T>> im
       throw new IllegalStateException("Invalid snapshot");
     }
     try {
-      Class<?> stateClass = Class.forName(stateClassName.toString());
-      this.state = (T) stateClass.newInstance();
+      this.state = (T) classLoader.loadClass(stateClassName.toString()).newInstance();
       initialize();
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
-      throw new IllegalStateException("Invalid snapshot state");
+      throw new IllegalStateException("Invalid snapshot state", e);
     }
     this.data = (Map<String, Object>) snapshot.get("data");
   }

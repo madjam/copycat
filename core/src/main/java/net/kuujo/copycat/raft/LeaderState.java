@@ -619,6 +619,11 @@ class LeaderState extends ActiveState {
             nextIndex = matchIndex + 1;
           }
         }
+        if (nextIndex != null && nextIndex < context.log().firstIndex()) {
+          LOGGER.info("Log does not contain nextIndex {} due to rollover. "
+                    + "Setting nextIndex for {} to log's firstIndex: {}", nextIndex, member, context.log().firstIndex());
+          nextIndex = context.log().firstIndex();
+        }
       }
 
       /**

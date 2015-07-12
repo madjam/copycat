@@ -301,6 +301,32 @@ public abstract class AbstractLogManager extends AbstractLoggable implements Log
   }
 
   @Override
+  public void split(long index) throws IOException {
+    Assert.index(index, currentSegment.containsIndex(index), "%s is not in last segment", index);
+    if (index + 1 == currentSegment.firstIndex()) {
+      return;
+    }
+    if (index == currentSegment.lastIndex()) {
+        rollOver(index+1);
+        return;
+    }
+    LOGGER.info("Splitting log at index {}", index);
+    LogSegment newSegment = createSegment(++nextSegmentId, index + 1);
+    newSegment.open();
+    segments.put(index + 1, newSegment);
+    for (long i=index+1; i<=currentSegment.lastIndex(); ++i) {
+      newSegment.appendEntry(currentSegment.getEntry(i));
+    }
+
+    currentSegment.removeAfter(index);
+    currentSegment.flush();
+    currentSegment.close();
+    currentSegment = newSegment;
+    // Reset the segment flush time and check whether old segments need to be deleted.
+    lastFlush = System.currentTimeMillis();
+  }
+
+  @Override
   public void flush() {
     assertIsOpen();
     // Only flush the current segment is flush-on-write is enabled or the flush timeout has passed since the last flush.

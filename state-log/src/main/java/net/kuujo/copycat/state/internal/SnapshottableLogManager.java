@@ -22,9 +22,7 @@ import net.kuujo.copycat.util.internal.Assert;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeMap;
 
 /**
@@ -191,6 +189,11 @@ public class SnapshottableLogManager implements LogManager {
     Assert.state(isOpen(), "Log is not open");
     Assert.index(index, logManager.containsIndex(index), "Log index out of bounds");
     logManager.removeAfter(index);
+  }
+
+  @Override
+  public void split(long index) throws IOException {
+      logManager.split(index);
   }
 
   @Override

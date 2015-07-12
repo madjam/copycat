@@ -23,6 +23,7 @@ import net.kuujo.copycat.state.StateLog;
 import net.kuujo.copycat.state.StateLogConfig;
 import net.kuujo.copycat.util.concurrent.Futures;
 import net.kuujo.copycat.util.internal.Assert;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -194,7 +195,14 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
     int entryType = entry.getInt();
     switch (entryType) {
       case SNAPSHOT_ENTRY: // Snapshot entry
-        installSnapshot(entry.slice());
+        if (installSnapshot(entry.slice())) {
+          LOGGER.info("Installed snapshot upto index {}", index);
+          try {
+            log.split(index);
+          } catch (IOException e) {
+            LOGGER.warn("Split failed", e);
+          }
+        }
         return ByteBuffer.allocate(0);
       case COMMAND_ENTRY: // Command entry
         int commandCode = entry.getInt();
@@ -224,7 +232,7 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
    */
   private void takeSnapshot(long term, long index) {
     String id = UUID.randomUUID().toString();
-    LOGGER.info("{} - Taking snapshot {}", context.name(), id);
+    LOGGER.info("{} - Taking snapshot {} upto index {}", context.name(), id, index);
 
     Object snapshot = snapshotter != null ? snapshotter.get() : null;
     ByteBuffer snapshotBuffer = snapshot != null ? serializer.writeObject(snapshot) : ByteBuffer.allocate(0);
@@ -281,7 +289,8 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
    * The metadata entry specifies a set of chunks that complete the entire snapshot.
    */
   @SuppressWarnings("unchecked")
-  private void installSnapshot(ByteBuffer snapshotChunk) {
+  private boolean installSnapshot(ByteBuffer snapshotChunk) {
+    boolean installedSnapshot = false;
     // Get the snapshot entry type.
     int type = snapshotChunk.getInt();
     if (type == SNAPSHOT_INFO) {
@@ -336,6 +345,7 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
 
               try {
                 installer.accept(serializer.readObject(completeSnapshot));
+                installedSnapshot = true;
               } catch (Exception e) {
                 LOGGER.warn("{} - Failed to install snapshot: {}", context.name(), e.getMessage());
               }
@@ -346,6 +356,7 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
         }
       }
     }
+    return installedSnapshot;
   }
 
   /**

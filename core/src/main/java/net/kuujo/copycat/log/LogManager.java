@@ -18,6 +18,8 @@ package net.kuujo.copycat.log;
 import java.io.IOException;
 import java.util.TreeMap;
 
+import net.kuujo.copycat.util.internal.Assert;
+
 /**
  * Log manager.
  *
@@ -80,4 +82,11 @@ public interface LogManager extends Loggable {
    */
   void compact(long index) throws IOException;
 
+  /**
+   * Splits log at the specified index.
+   * All log entries after the specified index will be moved to a new segment.
+   *
+   * @throws IOException If the log failed to split
+   */
+  void split(long index) throws IOException;
 }

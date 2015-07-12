@@ -82,7 +82,12 @@ abstract class ActiveState extends PassiveState {
     } else if (request.logIndex() != null && request.logTerm() != null) {
       return doCheckPreviousEntry(request);
     } else {
-      return doAppendEntries(request);
+      try {
+        return doAppendEntries(request);
+      } catch (Exception e) {
+         LOGGER.warn("doAppendEntries", e);
+        throw e;
+      }
     }
   }
 
@@ -132,7 +137,12 @@ abstract class ActiveState extends PassiveState {
       LOGGER.warn("{} - Rejected {}: Request entry term does not match local log. Local log term is {}. Replying with {}", context.getLocalMember(), request, localLogTerm, response);
       return response;
     } else {
-      return doAppendEntries(request);
+      try {
+        return doAppendEntries(request);
+      } catch (Exception e) {
+        LOGGER.warn("doAppendEntries", e);
+        throw e;
+      }
     }
   }
 
@@ -255,6 +265,7 @@ abstract class ActiveState extends PassiveState {
       LOGGER.debug("{} - Applying {} commits", context.getLocalMember(), context.getLastApplied() != null ? commitIndex - Math.max(context.getLastApplied(), context.log().firstIndex()) : commitIndex);
       if (context.getCommitIndex() == null || commitIndex > context.getCommitIndex() || context.getCommitIndex() > context.getLastApplied()) {
         // Update the local commit index with min(request commit, last log // index)
+        Long firstIndex = context.log().firstIndex();
         Long lastIndex = context.log().lastIndex();
         if (lastIndex != null) {
           context.setCommitIndex(Math.min(Math.max(commitIndex, context.getCommitIndex() != null ? context.getCommitIndex() : commitIndex), lastIndex));
@@ -264,7 +275,8 @@ abstract class ActiveState extends PassiveState {
           if (context.getLastApplied() == null || context.getCommitIndex() > context.getLastApplied()) {
             // Starting after the last applied entry, iterate through new entries
             // and apply them to the state machine up to the commit index.
-            for (long i = (context.getLastApplied() != null ? Long.valueOf(context.getLastApplied() + 1) : context.log().firstIndex()); i <= Math.min(context.getCommitIndex(), lastIndex); i++) {
+            Long firstIndexToApply = context.getLastApplied() == null || Long.valueOf(context.getLastApplied() + 1) < firstIndex ? firstIndex : Long.valueOf(context.getLastApplied() + 1);
+            for (long i = firstIndexToApply; i <= Math.min(context.getCommitIndex(), lastIndex); i++) {
               // Apply the entry to the state machine.
               applyEntry(i);
             }
@@ -278,7 +290,7 @@ abstract class ActiveState extends PassiveState {
    * Applies the given entry.
    */
   protected void applyEntry(long index) {
-    if ((context.getLastApplied() == null && index == context.log().firstIndex()) || (context.getLastApplied() != null && context.getLastApplied() == index - 1)) {
+    if (index == context.log().firstIndex() || (context.getLastApplied() != null && context.getLastApplied() == index - 1)) {
       ByteBuffer entry = context.log().getEntry(index);
 
       // Extract a view of the entry after the entry term.
