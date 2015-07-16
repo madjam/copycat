@@ -161,7 +161,7 @@ class LeaderState extends ActiveState {
       // This is done by making sure time since last successful quorum commit is less than the time
       // it takes for election to timeout
       case DEFAULT:
-        if (System.nanoTime() - replicator.commitTime() < context.getElectionTimeout() * 1000L) {
+        if (replicator.replicas.isEmpty() || System.nanoTime() - replicator.commitTime() < context.getElectionTimeout() * 1000L) {
           future.complete(logResponse(QueryResponse.builder()
             .withUri(context.getLocalMember())
             .withResult(consumer.apply(context.getTerm(), null, request.entry()))
