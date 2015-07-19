@@ -16,22 +16,21 @@
 package net.kuujo.copycat.netty;
 
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.codec.serialization.ClassResolvers;
-import io.netty.handler.codec.serialization.ObjectDecoder;
-import io.netty.handler.codec.serialization.ObjectEncoder;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.handler.codec.bytes.ByteArrayDecoder;
+import io.netty.handler.codec.bytes.ByteArrayEncoder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import net.kuujo.copycat.protocol.ProtocolHandler;
 import net.kuujo.copycat.protocol.ProtocolServer;
 
 import javax.net.ssl.SSLException;
-
+import java.nio.ByteBuffer;
 import java.security.cert.CertificateException;
 import java.util.concurrent.CompletableFuture;
 
@@ -45,6 +44,8 @@ public class NettyTcpProtocolServer implements ProtocolServer {
   private final int port;
   private final NettyTcpProtocol protocol;
   private ProtocolHandler handler;
+  private EventLoopGroup serverGroup;
+  private EventLoopGroup workerGroup;
   private Channel channel;
 
   public NettyTcpProtocolServer(String host, int port, NettyTcpProtocol protocol) {
@@ -76,29 +77,27 @@ public class NettyTcpProtocolServer implements ProtocolServer {
       sslContext = null;
     }
 
-    final EventLoopGroup serverGroup = new NioEventLoopGroup();
-    final EventLoopGroup workerGroup = new NioEventLoopGroup(protocol.getThreads());
+    serverGroup = new NioEventLoopGroup();
+    workerGroup = new NioEventLoopGroup(protocol.getThreads());
 
     final ServerBootstrap bootstrap = new ServerBootstrap();
     bootstrap.group(serverGroup, workerGroup)
-    .channel(NioServerSocketChannel.class)
-    .childHandler(new ChannelInitializer<SocketChannel>() {
-      @Override
-      public void initChannel(SocketChannel channel) throws Exception {
-        ChannelPipeline pipeline = channel.pipeline();
-        if (sslContext != null) {
-          pipeline.addLast(sslContext.newHandler(channel.alloc()));
+      .channel(NioServerSocketChannel.class)
+      .childHandler(new ChannelInitializer<SocketChannel>() {
+        @Override
+        public void initChannel(SocketChannel channel) throws Exception {
+          ChannelPipeline pipeline = channel.pipeline();
+          if (sslContext != null) {
+            pipeline.addLast(sslContext.newHandler(channel.alloc()));
+          }
+          pipeline.addLast("frameDecoder", new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));
+          pipeline.addLast("bytesDecoder", new ByteArrayDecoder());
+          pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
+          pipeline.addLast("bytesEncoder", new ByteArrayEncoder());
+          pipeline.addLast("handler", new ServerHandler());
         }
-        pipeline.addLast(
-            //new ObjectEncoder(),
-            //new ObjectDecoder(ClassResolvers.softCachingConcurrentResolver(getClass().getClassLoader())),
-            new MessageEncoder(),
-            new MessageDecoder(),
-            new TcpProtocolServerHandler(NettyTcpProtocolServer.this)
-        );
-      }
-    })
-    .option(ChannelOption.SO_BACKLOG, 128);
+      })
+      .option(ChannelOption.SO_BACKLOG, 128);
 
     if (protocol.getSendBufferSize() > -1) {
       bootstrap.option(ChannelOption.SO_SNDBUF, protocol.getSendBufferSize());
@@ -120,22 +119,16 @@ public class NettyTcpProtocolServer implements ProtocolServer {
     bootstrap.childOption(ChannelOption.SO_KEEPALIVE, true);
 
     // Bind and start to accept incoming connections.
-    bootstrap.bind(host, port).addListener(new ChannelFutureListener() {
-      @Override
-      public void operationComplete(ChannelFuture channelFuture) throws Exception {
-        channelFuture.channel().closeFuture().addListener(new ChannelFutureListener() {
-          @Override
-          public void operationComplete(ChannelFuture future) throws Exception {
-            workerGroup.shutdownGracefully();
-          }
-        });
+    bootstrap.bind(host, port).addListener((ChannelFutureListener) channelFuture -> {
+      channelFuture.channel().closeFuture().addListener(closeFuture -> {
+        workerGroup.shutdownGracefully();
+      });
 
-        if (channelFuture.isSuccess()) {
-          channel = channelFuture.channel();
-          future.complete(null);
-        } else {
-          future.completeExceptionally(channelFuture.cause());
-        }
+      if (channelFuture.isSuccess()) {
+        channel = channelFuture.channel();
+        future.complete(null);
+      } else {
+        future.completeExceptionally(channelFuture.cause());
       }
     });
     return future;
@@ -145,14 +138,13 @@ public class NettyTcpProtocolServer implements ProtocolServer {
   public CompletableFuture<Void> close() {
     final CompletableFuture<Void> future = new CompletableFuture<>();
     if (channel != null) {
-      channel.close().addListener(new ChannelFutureListener() {
-        @Override
-        public void operationComplete(ChannelFuture channelFuture) throws Exception {
-          if (channelFuture.isSuccess()) {
-            future.complete(null);
-          } else {
-            future.completeExceptionally(channelFuture.cause());
-          }
+      channel.close().addListener(channelFuture -> {
+        workerGroup.shutdownGracefully();
+        serverGroup.shutdownGracefully();
+        if (channelFuture.isSuccess()) {
+          future.complete(null);
+        } else {
+          future.completeExceptionally(channelFuture.cause());
         }
       });
     } else {
@@ -161,32 +153,27 @@ public class NettyTcpProtocolServer implements ProtocolServer {
     return future;
   }
 
-  /**
-   * Server request handler.
-   */
-  private static class TcpProtocolServerHandler extends ChannelInboundHandlerAdapter {
-    private final NettyTcpProtocolServer server;
-
-    private TcpProtocolServerHandler(NettyTcpProtocolServer server) {
-      this.server = server;
-    }
-
+  @Override
+  public String toString() {
+    return getClass().getSimpleName();
+  }
+  
+  private class ServerHandler extends SimpleChannelInboundHandler<byte[]> {
     @Override
-    public void channelRead(final ChannelHandlerContext context, Object message) {
-      ByteBuf request = (ByteBuf) message;
-      long requestId = request.readLong();
-
-      if (server.handler != null) {
-        context.channel().eventLoop().submit(() -> server.handler.apply(request.slice().nioBuffer()).whenComplete((result, error) -> {
-          try {
-        	ByteBuf responseBuffer = context.alloc().buffer(request.readableBytes() + 12);
-        	responseBuffer.writeLong(requestId);
-        	responseBuffer.writeBytes(result);
-        	context.writeAndFlush(responseBuffer);
-          } finally {
-        	request.release();  
+    protected void channelRead0(ChannelHandlerContext context, byte[] message) throws Exception {
+      if (handler != null) {
+        ByteBuffer buffer = ByteBuffer.wrap(message);
+        long requestId = buffer.getLong();
+        handler.apply(buffer.slice()).whenComplete((result, error) -> {
+          if (error == null) {
+            context.channel().eventLoop().execute(() -> {
+              ByteBuffer response = ByteBuffer.allocate(result.limit() + 8);
+              response.putLong(requestId);
+              response.put(result);
+              context.writeAndFlush(response.array());
+            });
           }
-        }));
+        });
       }
     }
 
@@ -194,7 +181,6 @@ public class NettyTcpProtocolServer implements ProtocolServer {
     public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
       context.close();
     }
-
   }
 
 }
