@@ -15,11 +15,14 @@
  */
 package net.kuujo.copycat.state;
 
+import java.util.function.BiConsumer;
+
 import net.kuujo.copycat.cluster.ClusterConfig;
 import net.kuujo.copycat.cluster.internal.coordinator.ClusterCoordinator;
 import net.kuujo.copycat.cluster.internal.coordinator.CoordinatorConfig;
 import net.kuujo.copycat.cluster.internal.coordinator.DefaultClusterCoordinator;
 import net.kuujo.copycat.resource.Resource;
+import net.kuujo.copycat.util.function.TriConsumer;
 
 /**
  * State machine.
@@ -102,4 +105,14 @@ public interface StateMachine<T> extends Resource<StateMachine<T>> {
    * @return The proxy object.
    */
   <U> U createProxy(Class<U> type, ClassLoader classLoader);
+
+  /**
+   * Register a watcher to be notified when state machine is mutated.
+   */
+  void registerWatcher(TriConsumer<String, Object, Object> watcher);
+
+  /**
+   * Unregisters a watcher.
+   */
+  void unregisterWatcher(TriConsumer<String, Object, Object> watcher);
 }

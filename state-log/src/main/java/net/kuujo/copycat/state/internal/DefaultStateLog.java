@@ -22,16 +22,20 @@ import net.kuujo.copycat.resource.internal.ResourceManager;
 import net.kuujo.copycat.state.StateLog;
 import net.kuujo.copycat.state.StateLogConfig;
 import net.kuujo.copycat.util.concurrent.Futures;
+import net.kuujo.copycat.util.function.TriConsumer;
 import net.kuujo.copycat.util.internal.Assert;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Sets;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,6 +57,7 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
   private static final int SNAPSHOT_INFO = 0;
   private static final int SNAPSHOT_CHUNK = 1;
   private final Map<Integer, OperationInfo> operations = new ConcurrentHashMap<>(128);
+  private final Set<TriConsumer<String, Object, Object>> watchers = Sets.newCopyOnWriteArraySet();
   private final Consistency defaultConsistency;
   private final SnapshottableLogManager log;
   private Supplier snapshotter;
@@ -72,7 +77,7 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
   @Override
   public <U extends T, V> StateLog<T> registerCommand(String name, Function<U, V> command) {
     Assert.state(isClosed(), "Cannot register command on open state log");
-    operations.put(name.hashCode(), new OperationInfo<>(command, false));
+    operations.put(name.hashCode(), new OperationInfo<>(name, command, false));
     LOGGER.debug("{} - Registered state log command {}", context.name(), name);
     return this;
   }
@@ -88,11 +93,24 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
   }
 
   @Override
+  public StateLog<T> registerWatcher(TriConsumer<String, Object, Object> watcher) {
+    Assert.state(isClosed(), "Cannot register watcher on open state log");
+    watchers.add(watcher);
+    return this;
+  }
+
+  @Override
+  public StateLog<T> unregisterWatcher(TriConsumer<String, Object, Object> watcher) {
+    watchers.remove(watcher);
+    return this;
+  }
+
+  @Override
   public <U extends T, V> StateLog<T> registerQuery(String name, Function<U, V> query) {
     Assert.state(isClosed(), "Cannot register command on open state log");
     Assert.isNotNull(name, "name");
     Assert.isNotNull(query, "query");
-    operations.put(name.hashCode(), new OperationInfo<>(query, true, defaultConsistency));
+    operations.put(name.hashCode(), new OperationInfo<>(name, query, true, defaultConsistency));
     LOGGER.debug("{} - Registered state log query {} with default consistency", context.name(), name);
     return this;
   }
@@ -102,7 +120,7 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
     Assert.state(isClosed(), "Cannot register command on open state log");
     Assert.isNotNull(name, "name");
     Assert.isNotNull(query, "query");
-    operations.put(name.hashCode(), new OperationInfo<>(query, true, consistency == null || consistency == Consistency.DEFAULT ? defaultConsistency : consistency));
+    operations.put(name.hashCode(), new OperationInfo<>(name, query, true, consistency == null || consistency == Consistency.DEFAULT ? defaultConsistency : consistency));
     LOGGER.debug("{} - Registered state log query {} with consistency {}", context.name(), name, consistency);
     return this;
   }
@@ -208,7 +226,10 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
         int commandCode = entry.getInt();
         OperationInfo operationInfo = operations.get(commandCode);
         if (operationInfo != null) {
-          return serializer.writeObject(operationInfo.execute(term, index, serializer.readObject(entry.slice())));
+          Object input = serializer.readObject(entry.slice());
+          Object output = operationInfo.execute(term, index, input);
+          watchers.forEach(w -> w.accept(operationInfo.name, input, output));
+          return serializer.writeObject(output);
         }
         throw new IllegalStateException("Invalid state log operation");
       default:
@@ -396,15 +417,17 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
    * State command info.
    */
   private class OperationInfo<TT, U> {
+    private final String name;
     private final Function<TT, U> function;
     private final boolean readOnly;
     private final Consistency consistency;
 
-    private OperationInfo(Function<TT, U> function, boolean readOnly) {
-      this(function, readOnly, Consistency.DEFAULT);
+    private OperationInfo(String name, Function<TT, U> function, boolean readOnly) {
+      this(name, function, readOnly, Consistency.DEFAULT);
     }
 
-    private OperationInfo(Function<TT, U> function, boolean readOnly, Consistency consistency) {
+    private OperationInfo(String name, Function<TT, U> function, boolean readOnly, Consistency consistency) {
+      this.name = name;
       this.function = function;
       this.readOnly = readOnly;
       this.consistency = consistency;
@@ -416,5 +439,4 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
       return function.apply(entry);
     }
   }
-
 }

@@ -21,8 +21,11 @@ import net.kuujo.copycat.cluster.internal.coordinator.CoordinatorConfig;
 import net.kuujo.copycat.cluster.internal.coordinator.DefaultClusterCoordinator;
 import net.kuujo.copycat.protocol.Consistency;
 import net.kuujo.copycat.resource.Resource;
+import net.kuujo.copycat.util.function.TriConsumer;
 
+import java.lang.reflect.Method;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -92,7 +95,7 @@ public interface StateLog<T> extends Resource<StateLog<T>> {
   /**
    * Registers a state command.
    *
-   * @param name The command name.
+   * @param name The command name
    * @param command The command function.
    * @param <U> The command input type.
    * @param <V> The command output type.
@@ -109,9 +112,23 @@ public interface StateLog<T> extends Resource<StateLog<T>> {
   StateLog<T> unregisterCommand(String name);
 
   /**
+   * Registers a watcher.
+   * @param watcher watcher
+   * @return The state log
+   */
+  StateLog<T> registerWatcher(TriConsumer<String, Object, Object> watcher);
+
+  /**
+   * Unregisters a watcher.
+   * @param watcher watcher
+   * @return The state log
+   */
+  StateLog<T> unregisterWatcher(TriConsumer<String, Object, Object> watcher);
+
+  /**
    * Registers a state query.
    *
-   * @param name The query name.
+   * @param name The query name
    * @param query The query function.
    * @param <U> The query input type.
    * @param <V> The query output type.
@@ -122,7 +139,7 @@ public interface StateLog<T> extends Resource<StateLog<T>> {
   /**
    * Registers a state query.
    *
-   * @param name The query name.
+   * @param name The query name
    * @param query The query function.
    * @param consistency The default query consistency.
    * @param <U> The query input type.

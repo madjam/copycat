@@ -19,6 +19,7 @@ import net.kuujo.copycat.cluster.Cluster;
 import net.kuujo.copycat.resource.internal.AbstractResource;
 import net.kuujo.copycat.resource.internal.ResourceManager;
 import net.kuujo.copycat.state.*;
+import net.kuujo.copycat.util.function.TriConsumer;
 import net.kuujo.copycat.util.internal.Assert;
 
 import java.lang.reflect.*;
@@ -255,4 +256,13 @@ public class DefaultStateMachine<T> extends AbstractResource<StateMachine<T>> im
     }
   }
 
+   @Override
+   public void registerWatcher(TriConsumer<String, Object, Object> watcher) {
+     log.registerWatcher(watcher);
+   }
+
+   @Override
+   public void unregisterWatcher(TriConsumer<String, Object, Object> watcher) {
+     log.unregisterWatcher(watcher);
+   }
 }
