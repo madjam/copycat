@@ -146,6 +146,7 @@ public class PassiveState extends RaftState {
             // If the response succeeded, update membership info with the target node's membership.
             if (response.status() == Response.Status.OK) {
               context.setMemberInfo(response.members());
+              recursiveSync(member, true, future);
             } else {
               LOGGER.warn("{} - Received error response from {}", context.getLocalMember(), member.getUri());
               future.completeExceptionally(response.error());
@@ -212,6 +213,7 @@ public class PassiveState extends RaftState {
           context.log().appendEntry(entry);
           context.setCommitIndex(index);
 
+          entry.flip();
           // Extract a view of the entry after the entry term.
           long term = entry.getLong();
           ByteBuffer userEntry = entry.slice();
