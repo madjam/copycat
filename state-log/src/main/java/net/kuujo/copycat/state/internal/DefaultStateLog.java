@@ -228,7 +228,10 @@ public class DefaultStateLog<T> extends AbstractResource<StateLog<T>> implements
         if (operationInfo != null) {
           Object input = serializer.readObject(entry.slice());
           Object output = operationInfo.execute(term, index, input);
-          watchers.forEach(w -> w.accept(operationInfo.name, input, output));
+          // Notify watchers if this is a state changing operation.
+          if (!operationInfo.readOnly) {
+              watchers.forEach(w -> w.accept(operationInfo.name, input, output));
+          }
           return serializer.writeObject(output);
         }
         throw new IllegalStateException("Invalid state log operation");
