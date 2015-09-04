@@ -9,7 +9,7 @@
 
   <groupId>org.onosproject</groupId>
   <artifactId>copycat-parent</artifactId>
-  <version>0.5.0.onos12-SNAPSHOT</version>
+  <version>0.5.0.onos</version>
   <packaging>pom</packaging>
   <name>Copycat</name>
   <description>Replicated state machine framework based on the Raft consensus algorithm. Fork based on http://github.com/kuujo/copycat</description>
@@ -73,6 +73,7 @@
     <module>event-log</module>
     <module>state-log</module>
     <module>state-machine</module>
+    <!-- ONOS does not need the following modules:
     <module>leader-election</module>
     <module>collections</module>
     <module>netty</module>
@@ -80,6 +81,7 @@
     <module>vertx3</module>
     <module>chronicle</module>
     <module>test-tools</module>
+    -->
   </modules>
 
   <dependencies>
