@@ -73,15 +73,15 @@
     <module>event-log</module>
     <module>state-log</module>
     <module>state-machine</module>
-    <!-- ONOS does not need the following modules:
     <module>leader-election</module>
     <module>collections</module>
+    <!-- ONOS does not need the following modules:
     <module>netty</module>
     <module>vertx</module>
     <module>vertx3</module>
     <module>chronicle</module>
-    <module>test-tools</module>
     -->
+    <module>test-tools</module>
   </modules>
 
   <dependencies>
