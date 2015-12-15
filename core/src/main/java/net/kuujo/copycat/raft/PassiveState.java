@@ -114,7 +114,7 @@ public class PassiveState extends RaftState {
     List<ByteBuffer> entries = new ArrayList<>(1024);
     Long firstIndex = null;
     if (!context.log().isEmpty() && context.getCommitIndex() != null) {
-      firstIndex = Math.max(member.getIndex() != null ? member.getIndex() + 1 : context.log().firstIndex(), context.log().lastIndex());
+      firstIndex = member.getIndex() != null ? member.getIndex() + 1 : context.log().firstIndex();
       long index = firstIndex;
       int size = 0;
       while (size < MAX_BATCH_SIZE && index <= context.getCommitIndex()) {
